@@ -754,11 +754,8 @@ function drawPlayer(p, now) {
   ctx.beginPath(); ctx.ellipse(x, y + TS * 0.34, R * 0.85, R * 0.34, 0, 0, 7); ctx.fill();
 
   if (meta.avatar) {
-    // just the avatar — a thin coloured ring gives identity, no filled "body" behind it
-    ctx.beginPath(); ctx.arc(x, cy, R * 0.9, 0, 7);
-    ctx.strokeStyle = meta.color; ctx.lineWidth = Math.max(2, TS * 0.07); ctx.stroke();
-    ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.font = `${Math.floor(TS * 0.66)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    // just the avatar emoji — clean, no ring/body behind it (colour lives in the name tag)
+    ctx.font = `${Math.floor(TS * 0.68)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#181022';   // solid fill so a monochrome-emoji platform still shows it
     ctx.fillText(meta.avatar, x, cy + 1);
@@ -775,14 +772,17 @@ function drawPlayer(p, now) {
     ctx.strokeStyle = shade(meta.color, -0.4); ctx.lineWidth = 2; ctx.stroke();
   }
 
-  // name tag above the head
+  // name tag above the head — background is the player's colour (identity)
   ctx.font = `bold ${Math.floor(TS * 0.24)}px ${getFont()}`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
   const tw = ctx.measureText(meta.name).width;
-  ctx.fillStyle = 'rgba(0,0,0,.6)';
-  roundRectFill(ctx, x - tw / 2 - 5, y - TS * 0.82, tw + 10, TS * 0.28, 5);
-  ctx.fillStyle = '#fff';
-  ctx.fillText(meta.name, x, y - TS * 0.58);
+  const ny = y - TS * 0.58;
+  ctx.fillStyle = meta.color;
+  roundRectFill(ctx, x - tw / 2 - 6, y - TS * 0.82, tw + 12, TS * 0.28, 6);
+  // white text with a dark outline so it reads on any colour (yellow, cyan…)
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 2.5; ctx.strokeText(meta.name, x, ny);
+  ctx.fillStyle = '#fff'; ctx.fillText(meta.name, x, ny);
 }
 
 function drawTopper(shape, x, cy, r, color) {
