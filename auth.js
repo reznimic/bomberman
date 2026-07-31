@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { AVATARS } = require('./constants');
+const { AVATARS, SPECIAL_AVATARS } = require('./constants');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const FILE = path.join(DATA_DIR, 'users.json');
@@ -41,10 +41,19 @@ function newToken(acc) {
   acc.tokens[token] = Date.now() + TOKEN_DAYS * 864e5;
   return token;
 }
+function specialOf(acc) {
+  const sp = SPECIAL_AVATARS[acc.name.toLowerCase()];
+  return sp ? '@' + sp : null;
+}
+function effectiveAvatar(acc) {
+  // an explicit choice wins; otherwise an entitled account defaults to its bonus avatar
+  return acc.avatar || specialOf(acc) || '';
+}
 function publicStats(acc) {
   return {
     name: acc.name,
-    avatar: acc.avatar || '',
+    avatar: effectiveAvatar(acc),
+    special: specialOf(acc),
     stats: acc.stats,
   };
 }
@@ -130,12 +139,17 @@ function statsOf(name) {
 }
 function avatarOf(name) {
   const acc = accounts[String(name || '').toLowerCase()];
-  return acc ? (acc.avatar || '') : null;
+  return acc ? effectiveAvatar(acc) : null;
 }
 function setAvatar(token, avatar) {
   const acc = validate(token);
   if (!acc) return { error: 'invalid' };
-  if (avatar !== '' && !AVATARS.includes(avatar)) return { error: 'Neplatný avatar.' };
+  avatar = typeof avatar === 'string' ? avatar : '';
+  if (avatar[0] === '@') {
+    if (avatar !== specialOf(acc)) return { error: 'Tenhle avatar ti nepatří.' };
+  } else if (avatar !== '' && !AVATARS.includes(avatar)) {
+    return { error: 'Neplatný avatar.' };
+  }
   acc.avatar = avatar;
   save();
   return { ok: true, avatar };

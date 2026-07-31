@@ -119,6 +119,7 @@ input:disabled { opacity: .6; cursor: not-allowed; }
 .av-opt:hover { border-color: var(--accent2); }
 .av-opt.sel { border-color: var(--accent2); background: #3a2f10; box-shadow: 0 0 0 2px rgba(242,192,38,.35); }
 .av-opt.av-none { color: var(--muted); font-size: 16px; }
+.av-opt.av-special { border-color: var(--accent2); box-shadow: 0 0 8px rgba(242,192,38,.5); }
 .player-chip .pav { font-size: 18px; flex: none; }
 
 /* room browser */

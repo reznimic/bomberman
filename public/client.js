@@ -752,13 +752,13 @@ function drawPacmanAvatar(x, cy, R, color, dir, now) {
   const face = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 }[dir] || 0;
   const mouth = 0.05 + 0.34 * Math.abs(Math.sin(now / 65));   // chomp!
   const g = ctx.createRadialGradient(x - R * 0.3, cy - R * 0.3, R * 0.2, x, cy, R);
-  g.addColorStop(0, shade(color, 0.45)); g.addColorStop(1, color);
+  g.addColorStop(0, '#fff08a'); g.addColorStop(1, '#f5c518');   // classic yellow Pac-Man
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.moveTo(x, cy);
   ctx.arc(x, cy, R * 0.92, face + mouth * Math.PI, face + (2 - mouth) * Math.PI);
   ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = shade(color, -0.4); ctx.lineWidth = 2; ctx.stroke();
+  ctx.strokeStyle = '#a5810a'; ctx.lineWidth = 2; ctx.stroke();
   // eye (offset perpendicular to facing, toward the top)
   const ex = x + Math.cos(face - Math.PI / 2) * R * 0.42;
   const ey = cy + Math.sin(face - Math.PI / 2) * R * 0.42 - R * 0.12;
@@ -1086,7 +1086,7 @@ function shade(hex, amt) {
 }
 
 // ===================== account / stats =====================
-const account = { token: null, name: null, stats: null, avatar: null };
+const account = { token: null, name: null, stats: null, avatar: null, special: null };
 try { account.token = localStorage.getItem('bmb-token') || null; } catch { /* ignore */ }
 
 async function api(path, body) {
@@ -1119,12 +1119,15 @@ function renderAvatarPicker() {
   if (!wrap) return;
   wrap.innerHTML = '';
   const cur = account.avatar || '';
-  for (const a of ['', ...AVATARS]) {   // '' = default (just the coloured disc)
+  // '' = default; then the bonus avatar (if the account has one); then the emoji
+  const opts = ['', ...(account.special ? [account.special] : []), ...AVATARS];
+  for (const a of opts) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'av-opt' + (a === cur ? ' sel' : '') + (a === '' ? ' av-none' : '');
-    b.textContent = a === '' ? '—' : a;
-    b.title = a === '' ? 'Bez avatara (jen barva)' : a;
+    const isSpecial = a && a[0] === '@';
+    b.className = 'av-opt' + (a === cur ? ' sel' : '') + (a === '' ? ' av-none' : '') + (isSpecial ? ' av-special' : '');
+    b.textContent = a === '' ? '—' : avatarLabel(a);
+    b.title = a === '' ? 'Bez avatara (jen barva)' : (isSpecial ? 'Bonus avatar 🎁' : a);
     b.addEventListener('click', () => chooseAvatar(a));
     wrap.appendChild(b);
   }
@@ -1145,7 +1148,7 @@ async function doAuth(kind) {
   const res = await api(kind, { name, pass });
   if (res.error) { accError(res.error); return; }
   setToken(res.token);
-  account.name = res.name; account.stats = res.stats; account.avatar = res.avatar;
+  account.name = res.name; account.stats = res.stats; account.avatar = res.avatar; account.special = res.special;
   document.getElementById('acc-pass').value = '';
   renderAccount();
 }
@@ -1187,7 +1190,7 @@ document.getElementById('stats-close').addEventListener('click', () => { documen
 document.getElementById('acc-pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') doAuth('login'); });
 if (account.token) {
   api('me', { token: account.token }).then(res => {
-    if (res && res.ok) { account.name = res.name; account.stats = res.stats; account.avatar = res.avatar; renderAccount(); }
+    if (res && res.ok) { account.name = res.name; account.stats = res.stats; account.avatar = res.avatar; account.special = res.special; renderAccount(); }
     else setToken(null);
   });
 }

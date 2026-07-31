@@ -32,6 +32,14 @@ const PLAYER_COLORS = [
   '#a259e6', '#ff8c1a', '#19c7c7', '#ec5fbd',
 ];
 
+// Bonus avatars for specific accounts (lowercase name -> special id: 'pacman' | 'taz').
+// Shown as an extra pick in that player's avatar picker (2nd slot) and used by default.
+const SPECIAL_AVATARS = {
+  tray: 'pacman',
+  tracy: 'pacman',
+  taz: 'taz',
+};
+
 // Avatar emoji — logged-in players pick one; guests/bots get a default by colour.
 const AVATARS = [
   '🐱', '🐶', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🐰', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞', '🐜', '🦗', '🦂', '🦀', '🐍', '🐢', '🐠', '🐟', '🐡', '🐬', '🐳', '🐋', '🦈', '🐙', '🦑', '🦐', '🦞', '🦕', '🦖', '🦎', '🐲', '🦓', '🦒', '🐘', '🦏', '🦛', '🐪', '🐫', '🦙', '🦘', '🦥', '🦦', '🦔', '🐇', '🐹', '🐭',
@@ -119,6 +127,6 @@ module.exports = {
   BASE_SPEED, SPEED_STEP, SPEED_MAX, FUSE, FLAME, KICK_SPEED,
   MAX_BOMBS_CAP, RANGE_CAP, POWERUP_LEVELS, POWERUP_LIFE, HUNTER_SPEED_MULT,
   TP_LIFE, TP_INTERVAL_MIN, TP_INTERVAL_MAX, TP_MAX,
-  PLAYER_COLORS, BOT_NAMES, AVATARS, MAPS, MAP_BY_ID,
+  PLAYER_COLORS, BOT_NAMES, AVATARS, SPECIAL_AVATARS, MAPS, MAP_BY_ID,
   inBounds, tileCenter, cellOf, clamp, approach, pillarAt, spawnsFor, spiralOrder,
 };
