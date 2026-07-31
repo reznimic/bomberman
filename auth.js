@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { AVATARS } = require('./constants');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const FILE = path.join(DATA_DIR, 'users.json');
@@ -43,6 +44,7 @@ function newToken(acc) {
 function publicStats(acc) {
   return {
     name: acc.name,
+    avatar: acc.avatar || AVATARS[0],
     stats: acc.stats,
   };
 }
@@ -62,6 +64,7 @@ async function register(name, pass) {
   const salt = crypto.randomBytes(16).toString('hex');
   const acc = {
     name, salt, hash: await hash(pass, salt), created: Date.now(), tokens: {},
+    avatar: AVATARS[(Math.random() * AVATARS.length) | 0],
     stats: { games: 0, wins: 0, kills: 0, deaths: 0, bonuses: 0, vs: {} },
   };
   accounts[key] = acc;
@@ -125,5 +128,17 @@ function statsOf(name) {
   const acc = accounts[String(name || '').toLowerCase()];
   return acc ? publicStats(acc) : null;
 }
+function avatarOf(name) {
+  const acc = accounts[String(name || '').toLowerCase()];
+  return acc ? (acc.avatar || AVATARS[0]) : null;
+}
+function setAvatar(token, avatar) {
+  const acc = validate(token);
+  if (!acc) return { error: 'invalid' };
+  if (!AVATARS.includes(avatar)) return { error: 'Neplatný avatar.' };
+  acc.avatar = avatar;
+  save();
+  return { ok: true, avatar };
+}
 
-module.exports = { register, login, validate, logout, isNameTaken, recordGame, publicStats, statsOf };
+module.exports = { register, login, validate, logout, isNameTaken, recordGame, publicStats, statsOf, avatarOf, setAvatar };

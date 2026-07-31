@@ -32,6 +32,14 @@ const PLAYER_COLORS = [
   '#a259e6', '#ff8c1a', '#19c7c7', '#ec5fbd',
 ];
 
+// Avatar emoji — logged-in players pick one; guests/bots get a default by colour.
+const AVATARS = [
+  '🐱', '🐶', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🐰', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞', '🐜', '🦗', '🦂', '🦀', '🐍', '🐢', '🐠', '🐟', '🐡', '🐬', '🐳', '🐋', '🦈', '🐙', '🦑', '🦐', '🦞', '🦕', '🦖', '🦎', '🐲', '🦓', '🦒', '🐘', '🦏', '🦛', '🐪', '🐫', '🦙', '🦘', '🦥', '🦦', '🦔', '🐇', '🐹', '🐭',
+  '👾', '🤖', '👽', '👻', '💀', '🎃', '🤡', '👹', '👺', '🧟', '🧛', '🧙', '🧞',
+  '🍔', '🍕', '🌭', '🍟', '🌮', '🍩', '🍪', '🧁', '🍰', '🍦', '🍭', '🍬', '🍫', '🍿', '🥐', '🍓', '🍉', '🍒', '🍑', '🥭', '🍌', '🍍', '🥥', '🥑', '🌽', '🥕', '🍄', '🥨', '🧀',
+  '💩', '⭐', '🌟', '🔥', '⚡', '🌈', '🎈', '🎩', '👑', '💎', '🚀', '🛸', '🎮', '🎲', '🎯', '🏀', '⚽', '🎸', '🥁', '💣',
+];
+
 // Fun names for bots (picked randomly, unique per room).
 const BOT_NAMES = [
   'Bombík', 'Dynamit', 'Rošťák', 'Prskavec', 'Rachejtle', 'Kanón', 'Petarda', 'Bumbác',
@@ -48,6 +56,9 @@ const MAPS = [
   { id: 'space', name: 'Vesmírná loď', brickFill: 0.68, pillars: 'sparse' },
   { id: 'desert', name: 'Pouštní ruiny', brickFill: 0.74, pillars: 'open' },
   { id: 'candy', name: 'Cukrové království', brickFill: 0.82, pillars: 'full' },
+  { id: 'neon', name: 'Neonová aréna', brickFill: 0.70, pillars: 'columns' },
+  { id: 'jungle', name: 'Divoká džungle', brickFill: 0.80, pillars: 'diag' },
+  { id: 'temple', name: 'Ztracený chrám', brickFill: 0.74, pillars: 'rings' },
 ];
 const MAP_BY_ID = Object.fromEntries(MAPS.map(m => [m.id, m]));
 
@@ -63,8 +74,15 @@ function approach(v, target, maxDelta) {
 
 // Indestructible pillar at an interior even/even cell for this variant?
 function pillarAt(variant, c, r, cols, rows) {
-  if (c % 2 !== 0 || r % 2 !== 0) return false;
-  if (variant === 'sparse') return ((c / 2 + r / 2) % 2) === 0;
+  if (c % 2 !== 0 || r % 2 !== 0) return false;   // pillars only ever on even/even -> corridors always open
+  const ci = c / 2, ri = r / 2;
+  if (variant === 'sparse') return ((ci + ri) % 2) === 0;
+  if (variant === 'columns') return ci % 2 === 0;                 // vertical pillar lanes
+  if (variant === 'diag') return ((ci + ri) % 3) === 0;           // sparse diagonal lines
+  if (variant === 'rings') {
+    const ring = Math.min(ci, ri, ((cols - 1) >> 1) - ci, ((rows - 1) >> 1) - ri);
+    return ring % 2 === 0;                                        // concentric squares
+  }
   if (variant === 'open') {
     const mc = (cols - 1) / 2, mr = (rows - 1) / 2;
     if (Math.abs(c - mc) <= 2 && Math.abs(r - mr) <= 2) return false;
@@ -101,6 +119,6 @@ module.exports = {
   BASE_SPEED, SPEED_STEP, SPEED_MAX, FUSE, FLAME, KICK_SPEED,
   MAX_BOMBS_CAP, RANGE_CAP, POWERUP_LEVELS, POWERUP_LIFE, HUNTER_SPEED_MULT,
   TP_LIFE, TP_INTERVAL_MIN, TP_INTERVAL_MAX, TP_MAX,
-  PLAYER_COLORS, BOT_NAMES, MAPS, MAP_BY_ID,
+  PLAYER_COLORS, BOT_NAMES, AVATARS, MAPS, MAP_BY_ID,
   inBounds, tileCenter, cellOf, clamp, approach, pillarAt, spawnsFor, spiralOrder,
 };

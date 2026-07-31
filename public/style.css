@@ -111,6 +111,15 @@ input:disabled { opacity: .6; cursor: not-allowed; }
 .btn.ghost:active { transform: none; box-shadow: none; }
 .hint.tiny { font-size: 11px; margin-top: 8px; }
 
+/* avatar picker */
+.acc-avatar-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.av-label { font-size: 13px; color: var(--muted); font-weight: 600; }
+.avatar-picker { display: flex; flex-wrap: wrap; gap: 4px; max-height: 148px; overflow-y: auto; padding: 2px; -webkit-overflow-scrolling: touch; }
+.av-opt { width: 34px; height: 34px; padding: 0; font-size: 20px; line-height: 1; cursor: pointer; border: 1px solid var(--line); background: #171338; border-radius: 8px; }
+.av-opt:hover { border-color: var(--accent2); }
+.av-opt.sel { border-color: var(--accent2); background: #3a2f10; box-shadow: 0 0 0 2px rgba(242,192,38,.35); }
+.player-chip .pav { font-size: 18px; flex: none; }
+
 /* room browser */
 .room-browser { background: #0f0c26; border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 14px; }
 .rb-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -143,6 +152,8 @@ table.vs th { color: var(--muted); font-weight: 600; }
 table.vs td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .stats-fab { right: 60px; }
 .fs-fab { left: 12px; right: auto; }
+.leave-fab { left: 60px; right: auto; }
+.back-btn { display: inline-block; width: auto; margin-bottom: 14px; }
 
 /* transient toast (e.g. the iOS fullscreen hint) */
 #toast {
@@ -243,6 +254,7 @@ kbd {
 .overlay-box { text-align: center; padding: 30px 40px; }
 .overlay-title { font-size: clamp(28px, 6vw, 52px); font-weight: 900; color: var(--accent2); text-shadow: 3px 3px 0 var(--accent); text-wrap: balance; }
 .overlay-sub { margin-top: 12px; font-size: 17px; color: var(--ink); }
+.overlay-sub .cd { display: inline-block; min-width: 1.2em; font-size: clamp(40px, 10vw, 80px); font-weight: 900; color: var(--accent2); text-shadow: 3px 3px 0 var(--accent); }
 
 .hud-card.timer { font-family: var(--mono); font-weight: 800; font-size: 15px; }
 .hud-card.timer.low { color: #ff6a4d; animation: pulseTimer 1s infinite; }

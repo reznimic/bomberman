@@ -19,6 +19,14 @@ const INTERP_DELAY = 70;   // ms rendered in the past to smooth network jitter
 
 const EMPTY = 0, SOLID = 1, BRICK = 2;
 
+// avatar emoji (must match constants.js AVATARS exactly)
+const AVATARS = [
+  '🐱', '🐶', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🐰', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞', '🐜', '🦗', '🦂', '🦀', '🐍', '🐢', '🐠', '🐟', '🐡', '🐬', '🐳', '🐋', '🦈', '🐙', '🦑', '🦐', '🦞', '🦕', '🦖', '🦎', '🐲', '🦓', '🦒', '🐘', '🦏', '🦛', '🐪', '🐫', '🦙', '🦘', '🦥', '🦦', '🦔', '🐇', '🐹', '🐭',
+  '👾', '🤖', '👽', '👻', '💀', '🎃', '🤡', '👹', '👺', '🧟', '🧛', '🧙', '🧞',
+  '🍔', '🍕', '🌭', '🍟', '🌮', '🍩', '🍪', '🧁', '🍰', '🍦', '🍭', '🍬', '🍫', '🍿', '🥐', '🍓', '🍉', '🍒', '🍑', '🥭', '🍌', '🍍', '🥥', '🥑', '🌽', '🥕', '🍄', '🥨', '🧀',
+  '💩', '⭐', '🌟', '🔥', '⚡', '🌈', '🎈', '🎩', '👑', '💎', '🚀', '🛸', '🎮', '🎲', '🎯', '🏀', '⚽', '🎸', '🥁', '💣',
+];
+
 // map list (ids must match server constants.js)
 const MAP_LIST = [
   { id: 'random', name: '🎲 Náhodná' },
@@ -30,6 +38,9 @@ const MAP_LIST = [
   { id: 'space', name: 'Vesmírná loď' },
   { id: 'desert', name: 'Pouštní ruiny' },
   { id: 'candy', name: 'Cukrové království' },
+  { id: 'neon', name: 'Neonová aréna' },
+  { id: 'jungle', name: 'Divoká džungle' },
+  { id: 'temple', name: 'Ztracený chrám' },
 ];
 
 // visual themes per map
@@ -42,6 +53,9 @@ const THEMES = {
   space: { floorA: '#151a2e', floorB: '#111527', solid: '#39415e', solidTop: '#565f82', brick: '#404a6b', brickL: '#586690', style: 'tech', glow: '#4ad7ff' },
   desert: { floorA: '#5a4a2a', floorB: '#4f4126', solid: '#8a7248', solidTop: '#ad9160', brick: '#a5793f', brickL: '#c79a55', style: 'stone' },
   candy: { floorA: '#5a2a4a', floorB: '#4f2542', solid: '#c86aa0', solidTop: '#f2a9d0', brick: '#e05a8a', brickL: '#ff86b3', style: 'candy' },
+  neon: { floorA: '#0d1424', floorB: '#0a1020', solid: '#1b2b4a', solidTop: '#2a4a7a', brick: '#16324f', brickL: '#1f4a72', style: 'tech', glow: '#3df0ff' },
+  jungle: { floorA: '#1a3a12', floorB: '#15330f', solid: '#3a2a18', solidTop: '#5a4028', brick: '#256b1e', brickL: '#379a2a', style: 'bush' },
+  temple: { floorA: '#4a4230', floorB: '#413a2a', solid: '#7a6a48', solidTop: '#9a8560', brick: '#8a7248', brickL: '#a88f5a', style: 'stone' },
 };
 function theme() { return THEMES[(S.static && S.static.map)] || THEMES.meadow; }
 
@@ -83,6 +97,7 @@ function handle(m) {
       break;
     case 'lobby':
       S.wins = {}; m.players.forEach(p => { S.wins[p.id] = p.wins; });
+      S.hostId = m.hostId;
       renderLobby(m.players);
       if (m.settings) applySettings(m.settings);
       if (m.state === 'lobby') { show('lobby'); S.result = null; }
@@ -96,6 +111,9 @@ function handle(m) {
     case 'result':
       S.wins = m.wins; S.result = { winnerId: m.winnerId };
       showResult(m.winnerId);
+      break;
+    case 'countdown':
+      showCountdown(m.n);
       break;
     case 'nameTaken':
       showJoinError(`Jméno „${m.name}" patří registrovanému hráči. Přihlas se, nebo zvol jiné.`);
@@ -111,25 +129,38 @@ function handle(m) {
 }
 
 // ===================== lobby =====================
+const HOST_CTRLS = ['sel-map', 'sel-size', 'sel-time', 'chk-teleports', 'sel-powerups', 'sel-bot', 'sel-bot-count', 'add-bot'];
 function renderLobby(players) {
+  const amHost = S.myIds.includes(S.hostId);
   document.getElementById('lobby-num').textContent = players.length;
   const list = document.getElementById('player-list');
   list.innerHTML = '';
   for (const p of players) {
     const li = document.createElement('li');
     li.className = 'player-chip' + (p.bot ? ' bot' : '');
+    const crown = p.id === S.hostId ? '👑 ' : '';
     li.innerHTML = `<span class="dot" style="background:${p.color};color:${p.color}"></span>
-      <span class="pname">${escapeHtml(p.name)}</span>
-      ${p.bot ? `<button class="premove" data-id="${p.id}" title="Odebrat bota">✕</button>`
+      <span class="pav">${p.avatar || ''}</span>
+      <span class="pname">${crown}${escapeHtml(p.name)}</span>
+      ${p.bot ? `<button class="premove" data-id="${p.id}" title="Odebrat bota" ${amHost ? '' : 'disabled'}>✕</button>`
               : `<span class="pwins">${p.wins}×</span>`}`;
     list.appendChild(li);
   }
-  list.querySelectorAll('.premove').forEach(b =>
-    b.addEventListener('click', () => send({ t: 'removeBot', id: +b.dataset.id })));
+  if (amHost) {
+    list.querySelectorAll('.premove').forEach(b =>
+      b.addEventListener('click', () => send({ t: 'removeBot', id: +b.dataset.id })));
+  }
+  // only the host controls settings + start
+  for (const id of HOST_CTRLS) { const el = document.getElementById(id); if (el) el.disabled = !amHost; }
   const btn = document.getElementById('start-btn');
   const ok = players.length >= 2;
-  btn.disabled = !ok;
-  btn.textContent = ok ? 'Spustit hru' : 'Spustit hru (přidej hráče nebo bota)';
+  if (!amHost) {
+    btn.disabled = true;
+    btn.textContent = 'Hru spustí host 👑';
+  } else {
+    btn.disabled = !ok;
+    btn.textContent = ok ? 'Spustit hru' : 'Spustit hru (přidej hráče nebo bota)';
+  }
 }
 
 // Lobby legend showing this device's actual (possibly custom) keys.
@@ -163,7 +194,7 @@ function startRound(m) {
   S.round = m.round;
   S.wins = m.wins;
   S.meta = {};
-  m.players.forEach(p => { S.meta[p.id] = { name: p.name, color: p.color, shape: p.shape || 0 }; });
+  m.players.forEach(p => { S.meta[p.id] = { name: p.name, color: p.color, avatar: p.avatar || '🙂' }; });
   TS = m.TS; COLS = m.COLS; ROWS = m.ROWS;
   S.grid = m.grid.map(row => row.slice());
   S.cur = null;
@@ -514,7 +545,7 @@ function drawBrick(g, c, r, th) {
       g.beginPath(); g.arc(x + TS * dx, y + TS * dy, TS * 0.16, 0, 7); g.fill();
     }
   } else if (s === 'candy') {
-    for (let i = -1; i < 4; i++) { g.fillRect(x + i * 12 + (y % 24 ? 6 : 0), y + 2, 6, TS - 4); }
+    for (let i = 0; i < 4; i++) g.fillRect(x + 4 + i * 11, y + 2, 6, TS - 4);   // stripes kept inside the tile
   } else if (s === 'ice') {
     g.globalAlpha = .6; g.beginPath(); g.moveTo(x + 6, y + 4); g.lineTo(x + TS - 6, y + 10); g.lineTo(x + TS - 10, y + TS - 6); g.lineTo(x + 8, y + TS - 10); g.closePath(); g.fill(); g.globalAlpha = 1;
   } else if (s === 'tech') {
@@ -698,41 +729,38 @@ function drawPowerup(pu) {
 }
 
 function drawPlayer(p, now) {
-  const meta = S.meta[p.id] || { color: '#fff', name: '?' };
+  const meta = S.meta[p.id] || { color: '#fff', name: '?', avatar: '🙂' };
   if (!p.alive) { drawGhost(p, meta); return; }
   const x = p.x, y = p.y;
   const bob = p.moving ? Math.sin(now / 70) * 2 : 0;
-  const bodyR = TS * 0.30;
+  const bodyR = TS * 0.32;
   const cy = y + bob;
   // shadow
   ctx.fillStyle = 'rgba(0,0,0,.28)';
-  ctx.beginPath(); ctx.ellipse(x, y + TS * 0.30, bodyR * 0.95, bodyR * 0.4, 0, 0, 7); ctx.fill();
-  // feet
+  ctx.beginPath(); ctx.ellipse(x, y + TS * 0.32, bodyR * 0.95, bodyR * 0.4, 0, 0, 7); ctx.fill();
+  // feet (walk animation)
   ctx.fillStyle = shade(meta.color, -0.35);
   const fw = bodyR * 0.5, spread = p.moving ? Math.sin(now / 70) * 3 : 0;
-  ctx.fillRect(x - fw - 1 + spread, y + TS * 0.14, fw, bodyR * 0.5);
-  ctx.fillRect(x + 1 - spread, y + TS * 0.14, fw, bodyR * 0.5);
-  // body
+  ctx.fillRect(x - fw - 1 + spread, y + TS * 0.16, fw, bodyR * 0.5);
+  ctx.fillRect(x + 1 - spread, y + TS * 0.16, fw, bodyR * 0.5);
+  // coloured disc = player identity
   const g = ctx.createRadialGradient(x - bodyR * 0.3, cy - bodyR * 0.4, bodyR * 0.2, x, cy, bodyR * 1.2);
-  g.addColorStop(0, shade(meta.color, 0.35)); g.addColorStop(1, meta.color);
+  g.addColorStop(0, shade(meta.color, 0.4)); g.addColorStop(1, meta.color);
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.arc(x, cy, bodyR, 0, 7); ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 2; ctx.stroke();
-  // helmet band
-  ctx.fillStyle = shade(meta.color, -0.25);
-  ctx.beginPath(); ctx.arc(x, cy - bodyR * 0.2, bodyR, Math.PI, 2 * Math.PI); ctx.fill();
-  // per-player avatar topper (distinguishes players by shape, not just colour)
-  drawTopper(meta.shape || 0, x, cy, bodyR, meta.color);
-  // face / visor depending on direction
-  drawFace(x, cy, bodyR, p.dir);
-  // name tag
+  ctx.strokeStyle = shade(meta.color, -0.4); ctx.lineWidth = 2.5; ctx.stroke();
+  // avatar emoji, sized to sit inside the disc so the coloured ring stays visible
+  ctx.font = `${Math.floor(bodyR * 1.5)}px serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(meta.avatar || '🙂', x, cy + 1);
+  // name tag, above the head so it never covers the avatar
   ctx.font = `bold ${Math.floor(TS * 0.24)}px ${getFont()}`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-  ctx.fillStyle = 'rgba(0,0,0,.6)';
   const tw = ctx.measureText(meta.name).width;
-  roundRectFill(ctx, x - tw / 2 - 5, y - TS * 0.62, tw + 10, TS * 0.28, 5);
+  ctx.fillStyle = 'rgba(0,0,0,.6)';
+  roundRectFill(ctx, x - tw / 2 - 5, y - TS * 0.78, tw + 10, TS * 0.28, 5);
   ctx.fillStyle = '#fff';
-  ctx.fillText(meta.name, x, y - TS * 0.38);
+  ctx.fillText(meta.name, x, y - TS * 0.54);
 }
 
 function drawTopper(shape, x, cy, r, color) {
@@ -859,6 +887,13 @@ function showResult(winnerId) {
   ov.hidden = false;
 }
 
+function showCountdown(n) {
+  const ov = document.getElementById('overlay');
+  ov.hidden = false;
+  document.getElementById('overlay-sub').innerHTML = `Další kolo za <span class="cd">${n}</span>`;
+  Sound.tick();
+}
+
 // ===================== sound =====================
 const Sound = (() => {
   let ac = null, muted = false;
@@ -889,6 +924,7 @@ const Sound = (() => {
     alarm() { tone(660, 0.12, 'square', 0.18); setTimeout(() => tone(660, 0.12, 'square', 0.18), 200); },
     warp() { tone(500, 0.12, 'sine', 0.15); setTimeout(() => tone(1000, 0.14, 'sine', 0.15), 60); setTimeout(() => tone(1600, 0.1, 'sine', 0.12), 130); },
     chomp() { tone(300, 0.09, 'square', 0.2); setTimeout(() => tone(180, 0.12, 'square', 0.2), 90); },
+    tick() { tone(880, 0.08, 'sine', 0.14); },
     toggle() { muted = !muted; return muted; },
     resume() { try { ctx().resume(); } catch {} },
   };
@@ -936,6 +972,18 @@ for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) {
   document.addEventListener(ev, () => { if (S.static) setTimeout(fitCanvas, 60); });
 }
 
+// leave the room / round and return to the main menu
+function leaveRoom() {
+  if (S.ws) { try { S.ws.onclose = null; S.ws.close(); } catch { /* ignore */ } S.ws = null; }
+  if (currentFsEl()) { try { exitFullscreen(); } catch { /* ignore */ } }
+  S.static = null; S.grid = null; S.cur = null; S.buf = [];
+  document.getElementById('overlay').hidden = true;
+  show('join');
+  refreshRooms();
+}
+document.getElementById('leave-btn').addEventListener('click', leaveRoom);
+document.getElementById('leave-lobby').addEventListener('click', leaveRoom);
+
 // ===================== helpers =====================
 let toastTimer = null;
 function toast(msg) {
@@ -958,7 +1006,7 @@ function shade(hex, amt) {
 }
 
 // ===================== account / stats =====================
-const account = { token: null, name: null, stats: null };
+const account = { token: null, name: null, stats: null, avatar: null };
 try { account.token = localStorage.getItem('bmb-token') || null; } catch { /* ignore */ }
 
 async function api(path, body) {
@@ -981,9 +1029,27 @@ function renderAccount() {
     document.getElementById('acc-who').textContent = account.name;
     nameInput.value = account.name;
     nameInput.disabled = true;
+    renderAvatarPicker();
   } else {
     nameInput.disabled = false;
   }
+}
+function renderAvatarPicker() {
+  const wrap = document.getElementById('avatar-picker');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  for (const a of AVATARS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'av-opt' + (a === account.avatar ? ' sel' : '');
+    b.textContent = a;
+    b.addEventListener('click', () => chooseAvatar(a));
+    wrap.appendChild(b);
+  }
+}
+async function chooseAvatar(a) {
+  const res = await api('avatar', { token: account.token, avatar: a });
+  if (res && res.ok) { account.avatar = res.avatar; renderAvatarPicker(); }
 }
 function accError(msg) {
   const el = document.getElementById('acc-error');
@@ -997,7 +1063,7 @@ async function doAuth(kind) {
   const res = await api(kind, { name, pass });
   if (res.error) { accError(res.error); return; }
   setToken(res.token);
-  account.name = res.name; account.stats = res.stats;
+  account.name = res.name; account.stats = res.stats; account.avatar = res.avatar;
   document.getElementById('acc-pass').value = '';
   renderAccount();
 }
@@ -1039,7 +1105,7 @@ document.getElementById('stats-close').addEventListener('click', () => { documen
 document.getElementById('acc-pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') doAuth('login'); });
 if (account.token) {
   api('me', { token: account.token }).then(res => {
-    if (res && res.ok) { account.name = res.name; account.stats = res.stats; renderAccount(); }
+    if (res && res.ok) { account.name = res.name; account.stats = res.stats; account.avatar = res.avatar; renderAccount(); }
     else setToken(null);
   });
 }

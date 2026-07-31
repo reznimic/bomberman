@@ -6,14 +6,15 @@ const path = require('path');
 const os = require('os');
 const { WebSocketServer } = require('ws');
 const { Game, PLAYER_COLORS } = require('./game');
-const { BOT_NAMES } = require('./constants');
+const { BOT_NAMES, AVATARS } = require('./constants');
 const auth = require('./auth');
 
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 8;
 const TICK_HZ = 60;
 const SNAP_EVERY = 2;      // broadcast every 2nd tick -> 30 Hz
-const RESULT_DELAY = 4;    // seconds of scoreboard before the next round
+const RESULT_DELAY = 2;    // seconds of scoreboard before the countdown
+const COUNTDOWN = 3;       // seconds of "3..2..1" before the next round
 
 // ---------------- static file server ----------------
 const PUBLIC = path.join(__dirname, 'public');
@@ -59,6 +60,7 @@ async function handleApi(req, res) {
     if (p === '/api/register') return send(await auth.register(body.name, body.pass));
     if (p === '/api/login') return send(await auth.login(body.name, body.pass));
     if (p === '/api/rooms') return send({ rooms: roomList() });
+    if (p === '/api/avatar') return send(auth.setAvatar(body.token, body.avatar));
     if (p === '/api/logout') { auth.logout(body.token); return send({ ok: true }); }
     if (p === '/api/me') {
       const acc = auth.validate(body.token);
@@ -124,10 +126,12 @@ class Room {
     this.players = new Map();     // pid -> {id,name,color,connId,wins}
     this.conns = new Map();       // connId -> {ws, pids:[]}
     this.nextPid = 1;
+    this.hostConn = null;   // connId of the host (first joiner); controls settings + start
     this.game = null;
     this.state = 'lobby';         // 'lobby' | 'playing'
     this.round = 0;
     this.resultSent = false;
+    this.lastCount = 0;
     this.loop = null;
     this.lastTime = 0;
     this.tickCount = 0;
@@ -140,18 +144,26 @@ class Room {
     const used = this.usedColors();
     return PLAYER_COLORS.find(c => !used.has(c)) || PLAYER_COLORS[this.players.size % PLAYER_COLORS.length];
   }
+  defaultAvatar(color) {
+    const i = PLAYER_COLORS.indexOf(color);
+    return AVATARS[(i < 0 ? this.players.size : i) % AVATARS.length];
+  }
 
   addConn(connId, ws, name, locals, names, account) {
     const conn = { ws, pids: [] };
     this.conns.set(connId, conn);
+    if (this.hostConn === null) this.hostConn = connId;   // first joiner becomes host
     const count = Math.max(1, Math.min(2, locals | 0));
     for (let i = 0; i < count; i++) {
       if (this.players.size >= MAX_PLAYERS) break;
       const pid = this.nextPid++;
       const pname = i === 0 ? name : ((names && names[1]) || `${name} 2`);
+      const color = this.freeColor();
+      const acct = i === 0 ? (account || null) : null;
+      const avatar = (acct && auth.avatarOf(acct)) || this.defaultAvatar(color);
       this.players.set(pid, {
-        id: pid, name: String(pname).slice(0, 14), color: this.freeColor(),
-        connId, wins: 0, bot: 0, account: i === 0 ? (account || null) : null,
+        id: pid, name: String(pname).slice(0, 14), color, avatar,
+        connId, wins: 0, bot: 0, account: acct,
       });
       conn.pids.push(pid);
     }
@@ -171,7 +183,8 @@ class Room {
     let added = 0;
     for (let i = 0; i < count && this.players.size < MAX_PLAYERS; i++) {
       const pid = this.nextPid++;
-      this.players.set(pid, { id: pid, name: this.botName(), color: this.freeColor(), connId: null, wins: 0, bot: level });
+      const color = this.freeColor();
+      this.players.set(pid, { id: pid, name: this.botName(), color, avatar: this.defaultAvatar(color), connId: null, wins: 0, bot: level });
       added++;
     }
     if (added) this.broadcastLobby();
@@ -195,12 +208,18 @@ class Room {
     }
     this.conns.delete(connId);
     if (this.conns.size === 0) { this.stop(); rooms.delete(this.code); return; }
+    if (this.hostConn === connId) this.hostConn = this.conns.keys().next().value || null;  // pass host on
     if (this.state === 'playing' && this.players.size < 2) this.stop();
     this.broadcastLobby();
   }
 
+  hostPid() {
+    const conn = this.conns.get(this.hostConn);
+    return conn && conn.pids.length ? conn.pids[0] : null;
+  }
+
   roster() {
-    return [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, bot: p.bot }));
+    return [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, bot: p.bot, avatar: p.avatar }));
   }
   winsMap() {
     const m = {};
@@ -217,8 +236,8 @@ class Room {
 
   broadcastLobby() {
     this.broadcast({
-      t: 'lobby', code: this.code, state: this.state, settings: this.settings, private: !!this.password,
-      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, wins: p.wins, bot: p.bot })),
+      t: 'lobby', code: this.code, state: this.state, settings: this.settings, private: !!this.password, hostId: this.hostPid(),
+      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, wins: p.wins, bot: p.bot, avatar: p.avatar })),
     });
   }
 
@@ -255,8 +274,16 @@ class Room {
       }
       this.broadcast({ t: 'result', winnerId: g.winnerId, wins: this.winsMap() });
       this.commitStats(g);
+      this.lastCount = 0;
     }
-    if (g.over && g.endTimer >= RESULT_DELAY) { this.startRound(); return; }
+    if (g.over && g.endTimer >= RESULT_DELAY) {
+      const remain = Math.ceil((RESULT_DELAY + COUNTDOWN) - g.endTimer);   // 3, 2, 1
+      if (remain > 0 && remain !== this.lastCount) {
+        this.lastCount = remain;
+        this.broadcast({ t: 'countdown', n: remain });
+      }
+      if (g.endTimer >= RESULT_DELAY + COUNTDOWN) { this.startRound(); return; }
+    }
 
     if (this.tickCount++ % SNAP_EVERY === 0) this.broadcast(g.snapshot());
   }
@@ -341,13 +368,16 @@ wss.on('connection', (ws) => {
       if (pid != null) room.game.setInput(pid, sanitizeInput(msg.input));
       return;
     }
+    // only the host may change settings, add/remove bots, and start
+    const isHost = room.hostConn === connId;
     if (msg.t === 'start') {
-      if (room.state !== 'playing') room.startRound();
+      if (isHost && room.state !== 'playing') room.startRound();
       return;
     }
-    if (msg.t === 'addBot') { room.addBot(msg.level, msg.count); return; }
-    if (msg.t === 'removeBot') { room.removeBot(msg.id | 0); return; }
+    if (msg.t === 'addBot') { if (isHost) room.addBot(msg.level, msg.count); return; }
+    if (msg.t === 'removeBot') { if (isHost) room.removeBot(msg.id | 0); return; }
     if (msg.t === 'settings') {
+      if (!isHost) return;
       if (msg.map !== undefined) room.settings.map = String(msg.map).slice(0, 12);
       if (msg.timeLimit !== undefined) room.settings.timeLimit = Math.max(0, Math.min(600, msg.timeLimit | 0));
       if (msg.size !== undefined && ['small', 'medium', 'large'].includes(msg.size)) room.settings.size = msg.size;

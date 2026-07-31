@@ -28,7 +28,9 @@ Pro ostatní na wifi: http://192.168.50.236:3000
 - Na úvodní obrazovce vidíš **seznam otevřených her** — k veřejné se připojíš tlačítkem,
   do soukromé (🔒) zadáš heslo. Nebo si založíš vlastní: zvolíš kód místnosti a jestli má být
   **veřejná** (bez hesla) nebo **soukromá** (s heslem).
-- Až je vás 2+, kdokoli klikne **Spustit hru**. Hraje se na kola pořád dokola.
+- **Host** místnosti (první hráč, 👑) řídí nastavení a spouští hru; ostatním se ovládání
+  zašedne. Když host odejde, role přejde na dalšího.
+- Mezi koly běží **odpočet 3… 2… 1…**, ať se všichni připraví.
 - Startovní pozice jsou každé kolo **náhodné**.
 
 Jiný port: `PORT=8080 npm start`
@@ -69,9 +71,9 @@ V lobby (než spustíte hru) může kdokoli nastavit:
 
   Každý hráč má navíc **vlastní avatar** – liší se nejen barvou, ale i tvarem
   (anténka, uši, hřebínek, rohy, koruna, kšiltovka, mašle, svatozář).
-- **Mapa** – 8 fantasy prostředí (Louka, Hradní sklepení, Ohnivá jeskyně, Ledová pláň,
-  Kouzelný les, Vesmírná loď, Pouštní ruiny, Cukrové království) nebo **🎲 Náhodná**
-  (jiná každé kolo).
+- **Mapa** – 11 fantasy prostředí (Louka, Hradní sklepení, Ohnivá jeskyně, Ledová pláň,
+  Kouzelný les, Vesmírná loď, Pouštní ruiny, Cukrové království, Neonová aréna, Divoká
+  džungle, Ztracený chrám) s různým rozložením sloupů, nebo **🎲 Náhodná** (jiná každé kolo).
 - **Velikost** – Malá (15×11), Střední (19×13) nebo Velká (25×15). Větší mapa = víc
   místa; políčka se automaticky zmenší, aby se mapa vešla na obrazovku.
 - **Množství bonusů** – Málo / Středně / Hodně (kolik cihel odhalí bonus). Bonusy navíc
@@ -101,6 +103,9 @@ Na úvodní obrazovce se můžeš **zaregistrovat** (přezdívka + heslo). Přih
   kolik bonusů jsi sebral, a tabulku „koho jsem odpálil / kdo odpálil mě".
 
 Statistiky otevřeš tlačítkem **📊**. Kdo se přihlásit nechce, hraje dál jako host.
+
+Přihlášený hráč si taky **vybere avatar** (emoji zvířátko/postavičku) — vybere jednou
+a hraje s ním pořád. Hosté a boti dostanou avatar automaticky podle barvy.
 
 > Účty se ukládají na serveru do `data/users.json`. Hesla jsou solená a hashovaná
 > (scrypt). Při aktualizaci na serveru tenhle soubor **nemaž**, ať účty nezmizí.

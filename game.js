@@ -94,6 +94,7 @@ class Game {
     }
     roster.forEach((entry, i) => {
       const pl = new Player(entry.id, entry.name, entry.color);
+      pl.avatar = entry.avatar || '🙂';
       if (entry.bot) pl.bot = makeBot(entry.bot);
       const [sc, sr] = spawns[i % spawns.length];
       pl.x = tileCenter(sc);
@@ -160,9 +161,13 @@ class Game {
   _updateBombPassSets() {
     for (const b of this.bombs) {
       if (b.passSet.size === 0) continue;
+      const bx0 = b.col * TS, by0 = b.row * TS;
       for (const id of [...b.passSet]) {
         const p = this.playerById(id);
-        if (!p || p.col() !== b.col || p.row() !== b.row) b.passSet.delete(id);
+        // stay passable until the player's body has fully stepped off the bomb tile
+        // (using the center cell here caused players to get stuck while still overlapping)
+        const off = !p || p.x + PR <= bx0 || p.x - PR >= bx0 + TS || p.y + PR <= by0 || p.y - PR >= by0 + TS;
+        if (off) b.passSet.delete(id);
       }
     }
   }
@@ -538,8 +543,7 @@ class Game {
       timeLimit: this.timeLimit,
       grid: this.grid.map(row => row.slice()),
       players: this.players.map(p => ({
-        id: p.id, name: p.name, color: p.color, bot: p.bot ? p.bot.level : 0,
-        shape: Math.max(0, PLAYER_COLORS.indexOf(p.color)),
+        id: p.id, name: p.name, color: p.color, bot: p.bot ? p.bot.level : 0, avatar: p.avatar,
       })),
     };
   }

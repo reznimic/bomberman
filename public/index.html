@@ -42,6 +42,10 @@
                 <button type="button" id="acc-logout-btn" class="btn small ghost">Odhlásit</button>
               </span>
             </div>
+            <div class="acc-avatar-row">
+              <span class="av-label">Tvůj avatar:</span>
+              <div id="avatar-picker" class="avatar-picker"></div>
+            </div>
           </div>
         </div>
 
@@ -84,6 +88,7 @@
     <!-- ===== LOBBY ===== -->
     <section id="screen-lobby" class="screen">
       <div class="panel wide">
+        <button type="button" id="leave-lobby" class="btn small ghost back-btn">← Zpět do menu</button>
         <div class="lobby-head">
           <div>
             <div class="eyebrow">Místnost</div>
@@ -184,6 +189,7 @@
 
       <button id="mute-btn" class="mute" title="Zvuk">🔊</button>
       <button id="fs-btn" class="mute fs-fab" title="Celá obrazovka">⛶</button>
+      <button id="leave-btn" class="mute leave-fab" title="Opustit hru">🚪</button>
       <button id="game-stats-btn" class="mute stats-fab" title="Statistiky" hidden>📊</button>
     </section>
 
