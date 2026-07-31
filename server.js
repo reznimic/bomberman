@@ -11,6 +11,13 @@ const auth = require('./auth');
 
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 8;
+
+// Bonus avatars for specific accounts (lowercase name -> special id). Not shown in the
+// picker; auto-applied in-game for that player. Special ids: 'pacman', 'taz'.
+const SPECIAL_AVATARS = {
+  // 'tracy': 'pacman',
+  // 'nekdo': 'taz',
+};
 const TICK_HZ = 60;
 const SNAP_EVERY = 2;      // broadcast every 2nd tick -> 30 Hz
 const RESULT_DELAY = 2;    // seconds of scoreboard before the countdown
@@ -162,8 +169,9 @@ class Room {
       const pname = i === 0 ? name : ((names && names[1]) || `${name} 2`);
       const color = this.freeColor();
       const acct = i === 0 ? (account || null) : null;
-      // logged-in player: use their chosen avatar (may be '' = plain); guest: default by colour
-      const avatar = acct ? (auth.avatarOf(acct) || '') : this.defaultAvatar(color);
+      const special = acct && SPECIAL_AVATARS[acct.toLowerCase()];
+      // logged-in player: bonus avatar > their chosen avatar ('' = plain); guest: default by colour
+      const avatar = acct ? (special ? '@' + special : (auth.avatarOf(acct) || '')) : this.defaultAvatar(color);
       this.players.set(pid, {
         id: pid, name: String(pname).slice(0, 14), color, avatar,
         connId, wins: 0, bot: 0, account: acct,

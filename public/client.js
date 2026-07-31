@@ -140,7 +140,7 @@ function renderLobby(players) {
     li.className = 'player-chip' + (p.bot ? ' bot' : '');
     const crown = p.id === S.hostId ? '👑 ' : '';
     li.innerHTML = `<span class="dot" style="background:${p.color};color:${p.color}"></span>
-      <span class="pav">${p.avatar || ''}</span>
+      <span class="pav">${avatarLabel(p.avatar)}</span>
       <span class="pname">${crown}${escapeHtml(p.name)}</span>
       ${p.bot ? `<button class="premove" data-id="${p.id}" title="Odebrat bota" ${amHost ? '' : 'disabled'}>✕</button>`
               : `<span class="pwins">${p.wins}×</span>`}`;
@@ -742,6 +742,55 @@ function drawPowerup(pu) {
   ctx.restore();
 }
 
+// ---- bonus (animated) avatars, drawn procedurally, coloured by the player ----
+function drawSpecial(id, x, cy, R, color, dir, now) {
+  if (id === 'pacman') drawPacmanAvatar(x, cy, R, color, dir, now);
+  else if (id === 'taz') drawTazAvatar(x, cy, R, color, now);
+  else { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, cy, R * 0.9, 0, 7); ctx.fill(); }
+}
+function drawPacmanAvatar(x, cy, R, color, dir, now) {
+  const face = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 }[dir] || 0;
+  const mouth = 0.05 + 0.34 * Math.abs(Math.sin(now / 65));   // chomp!
+  const g = ctx.createRadialGradient(x - R * 0.3, cy - R * 0.3, R * 0.2, x, cy, R);
+  g.addColorStop(0, shade(color, 0.45)); g.addColorStop(1, color);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(x, cy);
+  ctx.arc(x, cy, R * 0.92, face + mouth * Math.PI, face + (2 - mouth) * Math.PI);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = shade(color, -0.4); ctx.lineWidth = 2; ctx.stroke();
+  // eye (offset perpendicular to facing, toward the top)
+  const ex = x + Math.cos(face - Math.PI / 2) * R * 0.42;
+  const ey = cy + Math.sin(face - Math.PI / 2) * R * 0.42 - R * 0.12;
+  ctx.fillStyle = '#181022';
+  ctx.beginPath(); ctx.arc(ex, ey, R * 0.12, 0, 7); ctx.fill();
+}
+function drawTazAvatar(x, cy, R, color, now) {
+  const spin = now / 110;
+  // spinning motion streaks behind the body
+  ctx.strokeStyle = shade(color, -0.15); ctx.lineWidth = R * 0.13; ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(x, cy, R * (0.72 + i * 0.14), spin + i * 2.1, spin + i * 2.1 + 2.1); ctx.stroke(); }
+  ctx.lineCap = 'butt';
+  // body
+  const g = ctx.createRadialGradient(x - R * 0.3, cy - R * 0.3, R * 0.2, x, cy, R);
+  g.addColorStop(0, shade(color, 0.35)); g.addColorStop(1, color);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, cy, R * 0.78, 0, 7); ctx.fill();
+  ctx.strokeStyle = shade(color, -0.4); ctx.lineWidth = 2; ctx.stroke();
+  // angry eyes + brows
+  for (const s of [-1, 1]) {
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(x + s * R * 0.26, cy - R * 0.18, R * 0.15, R * 0.2, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#181022'; ctx.beginPath(); ctx.arc(x + s * R * 0.28, cy - R * 0.1, R * 0.08, 0, 7); ctx.fill();
+    ctx.strokeStyle = shade(color, -0.5); ctx.lineWidth = R * 0.09;
+    ctx.beginPath(); ctx.moveTo(x + s * R * 0.08, cy - R * 0.42); ctx.lineTo(x + s * R * 0.42, cy - R * 0.26); ctx.stroke();
+  }
+  // wide toothy grin
+  ctx.fillStyle = '#7a1414';
+  ctx.beginPath(); ctx.ellipse(x, cy + R * 0.3, R * 0.42, R * 0.24, 0, 0, Math.PI); ctx.fill();
+  ctx.fillStyle = '#fff';
+  for (let i = -2; i <= 2; i++) ctx.fillRect(x + i * R * 0.17 - R * 0.05, cy + R * 0.12, R * 0.1, R * 0.13);
+}
+
 function drawPlayer(p, now) {
   const meta = S.meta[p.id] || { color: '#fff', name: '?', avatar: '' };
   if (!p.alive) { drawGhost(p, meta); return; }
@@ -753,7 +802,10 @@ function drawPlayer(p, now) {
   ctx.fillStyle = 'rgba(0,0,0,.28)';
   ctx.beginPath(); ctx.ellipse(x, y + TS * 0.34, R * 0.85, R * 0.34, 0, 0, 7); ctx.fill();
 
-  if (meta.avatar) {
+  if (meta.avatar && meta.avatar[0] === '@') {
+    // bonus animated avatar (defined in code for specific accounts)
+    drawSpecial(meta.avatar.slice(1), x, cy, R, meta.color, p.dir, now);
+  } else if (meta.avatar) {
     // just the avatar emoji — clean, no ring/body behind it (colour lives in the name tag)
     ctx.font = `${Math.floor(TS * 0.68)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -1017,6 +1069,12 @@ function toast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 5000);
 }
 
+const SPECIAL_LABEL = { pacman: '🟡', taz: '🌀' };
+function avatarLabel(a) {   // lobby display; specials ('@id') show a stand-in emoji
+  if (!a) return '';
+  if (a[0] === '@') return SPECIAL_LABEL[a.slice(1)] || '⭐';
+  return a;
+}
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function getFont() { return "'Trebuchet MS', system-ui, sans-serif"; }
 function shade(hex, amt) {
