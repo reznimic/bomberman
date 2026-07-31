@@ -1,0 +1,12 @@
+[Unit]
+Description=Bomberman auto-deploy (pull latest from GitHub + restart if changed)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=misaamisa
+WorkingDirectory=/var/www/bomberman
+Environment=HOME=/home/misaamisa
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env bash /var/www/bomberman/deploy/auto-deploy.sh
