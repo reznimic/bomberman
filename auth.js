@@ -44,7 +44,7 @@ function newToken(acc) {
 function publicStats(acc) {
   return {
     name: acc.name,
-    avatar: acc.avatar || AVATARS[0],
+    avatar: acc.avatar || '',
     stats: acc.stats,
   };
 }
@@ -64,7 +64,7 @@ async function register(name, pass) {
   const salt = crypto.randomBytes(16).toString('hex');
   const acc = {
     name, salt, hash: await hash(pass, salt), created: Date.now(), tokens: {},
-    avatar: AVATARS[(Math.random() * AVATARS.length) | 0],
+    avatar: '',   // '' = default (just the coloured disc); player can pick one later
     stats: { games: 0, wins: 0, kills: 0, deaths: 0, bonuses: 0, vs: {} },
   };
   accounts[key] = acc;
@@ -130,12 +130,12 @@ function statsOf(name) {
 }
 function avatarOf(name) {
   const acc = accounts[String(name || '').toLowerCase()];
-  return acc ? (acc.avatar || AVATARS[0]) : null;
+  return acc ? (acc.avatar || '') : null;
 }
 function setAvatar(token, avatar) {
   const acc = validate(token);
   if (!acc) return { error: 'invalid' };
-  if (!AVATARS.includes(avatar)) return { error: 'Neplatný avatar.' };
+  if (avatar !== '' && !AVATARS.includes(avatar)) return { error: 'Neplatný avatar.' };
   acc.avatar = avatar;
   save();
   return { ok: true, avatar };

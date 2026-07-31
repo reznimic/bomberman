@@ -142,7 +142,9 @@ class Room {
   usedColors() { return new Set([...this.players.values()].map(p => p.color)); }
   freeColor() {
     const used = this.usedColors();
-    return PLAYER_COLORS.find(c => !used.has(c)) || PLAYER_COLORS[this.players.size % PLAYER_COLORS.length];
+    const free = PLAYER_COLORS.filter(c => !used.has(c));
+    const pool = free.length ? free : PLAYER_COLORS;
+    return pool[(Math.random() * pool.length) | 0];   // random (but unique) colour per player
   }
   defaultAvatar(color) {
     const i = PLAYER_COLORS.indexOf(color);
@@ -160,7 +162,8 @@ class Room {
       const pname = i === 0 ? name : ((names && names[1]) || `${name} 2`);
       const color = this.freeColor();
       const acct = i === 0 ? (account || null) : null;
-      const avatar = (acct && auth.avatarOf(acct)) || this.defaultAvatar(color);
+      // logged-in player: use their chosen avatar (may be '' = plain); guest: default by colour
+      const avatar = acct ? (auth.avatarOf(acct) || '') : this.defaultAvatar(color);
       this.players.set(pid, {
         id: pid, name: String(pname).slice(0, 14), color, avatar,
         connId, wins: 0, bot: 0, account: acct,

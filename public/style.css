@@ -118,6 +118,7 @@ input:disabled { opacity: .6; cursor: not-allowed; }
 .av-opt { width: 34px; height: 34px; padding: 0; font-size: 20px; line-height: 1; cursor: pointer; border: 1px solid var(--line); background: #171338; border-radius: 8px; }
 .av-opt:hover { border-color: var(--accent2); }
 .av-opt.sel { border-color: var(--accent2); background: #3a2f10; box-shadow: 0 0 0 2px rgba(242,192,38,.35); }
+.av-opt.av-none { color: var(--muted); font-size: 16px; }
 .player-chip .pav { font-size: 18px; flex: none; }
 
 /* room browser */

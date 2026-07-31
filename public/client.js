@@ -749,10 +749,15 @@ function drawPlayer(p, now) {
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.arc(x, cy, bodyR, 0, 7); ctx.fill();
   ctx.strokeStyle = shade(meta.color, -0.4); ctx.lineWidth = 2.5; ctx.stroke();
-  // avatar emoji, sized to sit inside the disc so the coloured ring stays visible
-  ctx.font = `${Math.floor(bodyR * 1.5)}px serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(meta.avatar || '🙂', x, cy + 1);
+  // avatar emoji on top (skip for the plain/default avatar).
+  // Use an emoji-capable font + a solid fill: on some platforms a canvas emoji is
+  // drawn as a monochrome glyph that would otherwise inherit the disc gradient and vanish.
+  if (meta.avatar) {
+    ctx.font = `${Math.floor(bodyR * 1.55)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#181022';
+    ctx.fillText(meta.avatar, x, cy + 1);
+  }
   // name tag, above the head so it never covers the avatar
   ctx.font = `bold ${Math.floor(TS * 0.24)}px ${getFont()}`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
@@ -1038,11 +1043,13 @@ function renderAvatarPicker() {
   const wrap = document.getElementById('avatar-picker');
   if (!wrap) return;
   wrap.innerHTML = '';
-  for (const a of AVATARS) {
+  const cur = account.avatar || '';
+  for (const a of ['', ...AVATARS]) {   // '' = default (just the coloured disc)
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'av-opt' + (a === account.avatar ? ' sel' : '');
-    b.textContent = a;
+    b.className = 'av-opt' + (a === cur ? ' sel' : '') + (a === '' ? ' av-none' : '');
+    b.textContent = a === '' ? '—' : a;
+    b.title = a === '' ? 'Bez avatara (jen barva)' : a;
     b.addEventListener('click', () => chooseAvatar(a));
     wrap.appendChild(b);
   }
@@ -1219,4 +1226,14 @@ function showJoinError(msg) {
 }
 
 setupTouch();
+
+// one-time hint for iPhone/iPad: add to home screen for a chrome-less fullscreen
+(function iosHint() {
+  const iOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = ('standalone' in navigator ? navigator.standalone : false) || matchMedia('(display-mode: standalone)').matches;
+  if (!iOS || standalone) return;
+  try { if (localStorage.getItem('bmb-a2hs')) return; localStorage.setItem('bmb-a2hs', '1'); } catch { /* ignore */ }
+  setTimeout(() => toast('📱 Tip: Sdílet → „Přidat na plochu" a hraj hru na celou obrazovku bez lišty.'), 1800);
+})();
+
 requestAnimationFrame(draw);
