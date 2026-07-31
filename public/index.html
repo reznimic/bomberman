@@ -2,7 +2,12 @@
 <html lang="cs">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Bomberman" />
+  <meta name="theme-color" content="#0c0a1c" />
   <title>💣 Bomberman LAN</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>💣</text></svg>" />
   <link rel="stylesheet" href="style.css" />
@@ -40,12 +45,28 @@
           </div>
         </div>
 
+        <div class="room-browser">
+          <div class="rb-head">
+            <span class="rb-title">Otevřené hry</span>
+            <button type="button" id="rb-refresh" class="btn small ghost" title="Obnovit">↻</button>
+          </div>
+          <ul id="room-list" class="room-list"><li class="rb-empty">Načítám…</li></ul>
+        </div>
+
         <form id="join-form" autocomplete="off">
           <label>Tvoje jméno
             <input id="f-name" type="text" maxlength="14" placeholder="Táta" required />
           </label>
           <label>Kód místnosti
             <input id="f-room" type="text" maxlength="12" value="HRA" required />
+          </label>
+          <fieldset class="locals">
+            <legend>Typ místnosti (jen při zakládání nové)</legend>
+            <label class="radio"><input type="radio" name="vis" value="public" checked /> <span>Veřejná</span></label>
+            <label class="radio"><input type="radio" name="vis" value="private" /> <span>🔒 Soukromá</span></label>
+          </fieldset>
+          <label id="pw-wrap" hidden>Heslo místnosti
+            <input id="f-pass" type="password" maxlength="64" placeholder="heslo pro soukromou hru" />
           </label>
           <fieldset class="locals">
             <legend>Kolik vás hraje na tomhle počítači?</legend>

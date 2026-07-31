@@ -25,8 +25,11 @@ Pro ostatní na wifi: http://192.168.50.236:3000
 
 - **Ty** (co jsi spustil server) otevřeš `http://localhost:3000`.
 - **Ostatní** ve stejné wifi otevřou tu druhou adresu (`http://192.168...:3000`) v prohlížeči na svém počítači/notebooku.
-- Všichni zadají **stejný kód místnosti** (výchozí `HRA`), napíšou jméno a připojí se.
+- Na úvodní obrazovce vidíš **seznam otevřených her** — k veřejné se připojíš tlačítkem,
+  do soukromé (🔒) zadáš heslo. Nebo si založíš vlastní: zvolíš kód místnosti a jestli má být
+  **veřejná** (bez hesla) nebo **soukromá** (s heslem).
 - Až je vás 2+, kdokoli klikne **Spustit hru**. Hraje se na kola pořád dokola.
+- Startovní pozice jsou každé kolo **náhodné**.
 
 Jiný port: `PORT=8080 npm start`
 

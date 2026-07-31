@@ -57,6 +57,7 @@ function show(name) {
 
 // ===================== networking =====================
 function connect(payload) {
+  if (S.ws) { try { S.ws.onclose = null; S.ws.close(); } catch { /* ignore */ } }
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${proto}://${location.host}`);
   S.ws = ws;
@@ -98,6 +99,9 @@ function handle(m) {
       break;
     case 'nameTaken':
       showJoinError(`Jméno „${m.name}" patří registrovanému hráči. Přihlas se, nebo zvol jiné.`);
+      break;
+    case 'wrongPassword':
+      showJoinError('Špatné heslo místnosti.');
       break;
     case 'stats':
       account.name = m.name; account.stats = m.stats;
@@ -905,19 +909,27 @@ document.getElementById('mute-btn').addEventListener('click', (ev) => {
   ev.currentTarget.textContent = muted ? '🔇' : '🔊';
 });
 
-// fullscreen: show only the game view (map + HUD), not the whole browser
+// fullscreen: show only the game (no browser chrome). Robust across vendors.
+function currentFsEl() {
+  return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement || null;
+}
+function reqFullscreen(el) {
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+  return fn ? fn.call(el) : null;   // null => this browser can't fullscreen an element (iOS Safari)
+}
+function exitFullscreen() {
+  const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+  if (fn) fn.call(document);
+}
 function toggleFullscreen() {
-  const el = document.getElementById('screen-game');
-  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-  try {
-    if (!fsEl) {
-      const req = el.requestFullscreen || el.webkitRequestFullscreen;
-      if (req) req.call(el);
-    } else {
-      const exit = document.exitFullscreen || document.webkitExitFullscreen;
-      if (exit) exit.call(document);
-    }
-  } catch { /* unsupported (e.g. iOS Safari) — ignore */ }
+  if (currentFsEl()) { try { exitFullscreen(); } catch { /* ignore */ } return; }
+  let p = null;
+  try { p = reqFullscreen(document.getElementById('screen-game')); } catch { p = null; }
+  if (p === null) {
+    toast('Tenhle prohlížeč celou obrazovku nepovolí. Na iPadu/iPhonu dej Sdílet → „Přidat na plochu" a hru spusť odtud — poběží bez lišty.');
+    return;
+  }
+  Promise.resolve(p).catch(() => { try { reqFullscreen(document.documentElement); } catch { /* ignore */ } });
 }
 document.getElementById('fs-btn').addEventListener('click', toggleFullscreen);
 for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) {
@@ -925,6 +937,16 @@ for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) {
 }
 
 // ===================== helpers =====================
+let toastTimer = null;
+function toast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 5000);
+}
+
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function getFont() { return "'Trebuchet MS', system-ui, sans-serif"; }
 function shade(hex, amt) {
@@ -1029,12 +1051,63 @@ document.getElementById('join-form').addEventListener('submit', (e) => {
   Sound.resume();
   const name = account.name || (document.getElementById('f-name').value.trim() || 'Hráč');
   const room = document.getElementById('f-room').value.trim() || 'HRA';
+  const isPrivate = document.querySelector('input[name=vis]:checked').value === 'private';
+  const password = document.getElementById('f-pass').value;
+  if (isPrivate && !password) { showJoinError('Zadej heslo pro soukromou místnost.'); return; }
   S.locals = selectedLocals();
   S.bindings = keyStore[S.locals];
   recomputeCodes();
   const names = S.locals === 2 ? [name, name + ' 2'] : [name];
-  connect({ name, room, locals: S.locals, names, token: account.token || undefined });
+  connect({ name, room, locals: S.locals, names, token: account.token || undefined, private: isPrivate, password: password || undefined });
 });
+
+// ---- room browser (list of open games) ----
+function renderRooms(list) {
+  const ul = document.getElementById('room-list');
+  if (!list || !list.length) {
+    ul.innerHTML = '<li class="rb-empty">Zatím žádné otevřené hry — založ si vlastní níže.</li>';
+    return;
+  }
+  ul.innerHTML = '';
+  for (const r of list) {
+    const full = r.count >= r.max;
+    const li = document.createElement('li');
+    li.className = 'room-row';
+    li.innerHTML = `
+      <div class="rr-main">
+        <span class="rr-code">${r.hasPassword ? '🔒 ' : ''}${escapeHtml(r.code)}</span>
+        <span class="rr-players">${r.players.map(escapeHtml).join(', ') || '—'}</span>
+      </div>
+      <div class="rr-side">
+        <span class="rr-count">${r.count}/${r.max}${r.playing ? ' · hraje' : ''}</span>
+        <button type="button" class="btn small rr-join" ${full ? 'disabled' : ''}>${full ? 'Plno' : 'Připojit'}</button>
+      </div>`;
+    if (!full) li.querySelector('.rr-join').addEventListener('click', () => joinRoom(r));
+    ul.appendChild(li);
+  }
+}
+function joinRoom(r) {
+  document.getElementById('f-room').value = r.code;
+  if (r.hasPassword) {
+    const pw = prompt(`Heslo místnosti „${r.code}":`);
+    if (pw === null) return;
+    document.getElementById('f-pass').value = pw;
+  } else {
+    document.getElementById('f-pass').value = '';
+  }
+  document.getElementById('join-form').requestSubmit();
+}
+async function refreshRooms() {
+  if (!screens.join.classList.contains('active')) return;
+  const res = await api('rooms', {});
+  if (res && res.rooms) renderRooms(res.rooms);
+}
+document.getElementById('rb-refresh').addEventListener('click', refreshRooms);
+document.querySelectorAll('input[name=vis]').forEach(el => el.addEventListener('change', () => {
+  document.getElementById('pw-wrap').hidden = document.querySelector('input[name=vis]:checked').value !== 'private';
+}));
+setInterval(refreshRooms, 4000);
+refreshRooms();
 document.getElementById('start-btn').addEventListener('click', () => { Sound.resume(); send({ t: 'start' }); });
 
 // re-render the key config when switching 1<->2 players

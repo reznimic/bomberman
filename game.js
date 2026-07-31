@@ -87,6 +87,11 @@ class Game {
     this._generateMap();
 
     const spawns = spawnsFor(this.cols, this.rows);
+    // shuffle so players don't always start in the same corner each round
+    for (let i = spawns.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      [spawns[i], spawns[j]] = [spawns[j], spawns[i]];
+    }
     roster.forEach((entry, i) => {
       const pl = new Player(entry.id, entry.name, entry.color);
       if (entry.bot) pl.bot = makeBot(entry.bot);

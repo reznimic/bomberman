@@ -58,6 +58,7 @@ async function handleApi(req, res) {
     const p = req.url.split('?')[0];
     if (p === '/api/register') return send(await auth.register(body.name, body.pass));
     if (p === '/api/login') return send(await auth.login(body.name, body.pass));
+    if (p === '/api/rooms') return send({ rooms: roomList() });
     if (p === '/api/logout') { auth.logout(body.token); return send({ ok: true }); }
     if (p === '/api/me') {
       const acc = auth.validate(body.token);
@@ -89,12 +90,32 @@ const server = http.createServer((req, res) => {
 /** @type {Map<string, Room>} */
 const rooms = new Map();
 
+// restrict to a safe charset so a room code can never carry markup/HTML
+function normalizeCode(code) {
+  return String(code || 'HRA').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) || 'HRA';
+}
 function getRoom(code) {
-  // restrict to a safe charset so a room code can never carry markup/HTML
-  code = String(code || 'HRA').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12) || 'HRA';
+  code = normalizeCode(code);
   let room = rooms.get(code);
   if (!room) { room = new Room(code); rooms.set(code, room); }
   return room;
+}
+
+// public list of active rooms for the lobby browser
+function roomList() {
+  const out = [];
+  for (const room of rooms.values()) {
+    if (room.conns.size === 0) continue;   // only rooms with real people
+    out.push({
+      code: room.code,
+      count: room.players.size,
+      max: MAX_PLAYERS,
+      players: [...room.players.values()].map(p => p.name),
+      playing: room.state === 'playing',
+      hasPassword: !!room.password,
+    });
+  }
+  return out;
 }
 
 class Room {
@@ -110,6 +131,7 @@ class Room {
     this.loop = null;
     this.lastTime = 0;
     this.tickCount = 0;
+    this.password = null;   // null = public room; set = private (password required)
     this.settings = { map: 'random', timeLimit: 120, size: 'medium', teleports: true, powerups: 'medium' };
   }
 
@@ -195,7 +217,7 @@ class Room {
 
   broadcastLobby() {
     this.broadcast({
-      t: 'lobby', code: this.code, state: this.state, settings: this.settings,
+      t: 'lobby', code: this.code, state: this.state, settings: this.settings, private: !!this.password,
       players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, wins: p.wins, bot: p.bot })),
     });
   }
@@ -289,8 +311,18 @@ wss.on('connection', (ws) => {
       let name = String(msg.name || 'Hráč').trim() || 'Hráč';
       if (account) name = account;
       else if (auth.isNameTaken(name)) { ws.send(JSON.stringify({ t: 'nameTaken', name })); return; }
-      const r = getRoom(msg.room);
-      if (r.players.size >= MAX_PLAYERS) { ws.send(JSON.stringify({ t: 'full' })); return; }
+      const code = normalizeCode(msg.room);
+      const existed = rooms.has(code);
+      const r = getRoom(code);
+      // the person who first enters a room defines whether it's public or private
+      if (!existed) r.password = (msg.private && msg.password) ? String(msg.password).slice(0, 64) : null;
+      // private rooms require the matching password to join
+      if (r.password && String(msg.password || '') !== r.password) {
+        ws.send(JSON.stringify({ t: 'wrongPassword' }));
+        if (!existed) rooms.delete(code);
+        return;
+      }
+      if (r.players.size >= MAX_PLAYERS) { ws.send(JSON.stringify({ t: 'full' })); if (!existed) rooms.delete(code); return; }
       room = r;
       const pids = room.addConn(connId, ws, name, msg.locals, msg.names, account);
       ws.send(JSON.stringify({ t: 'joined', ids: pids, code: room.code, max: MAX_PLAYERS, name }));
