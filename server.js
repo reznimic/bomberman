@@ -6,7 +6,7 @@ const path = require('path');
 const os = require('os');
 const { WebSocketServer } = require('ws');
 const { Game, PLAYER_COLORS } = require('./game');
-const { BOT_NAMES, AVATARS } = require('./constants');
+const { BOT_NAMES, AVATARS, EMOTES } = require('./constants');
 const auth = require('./auth');
 
 const PORT = process.env.PORT || 3000;
@@ -136,7 +136,7 @@ class Room {
     this.lastTime = 0;
     this.tickCount = 0;
     this.password = null;   // null = public room; set = private (password required)
-    this.settings = { map: 'random', timeLimit: 120, size: 'medium', teleports: true, powerups: 'medium' };
+    this.settings = { map: 'random', timeLimit: 120, size: 'medium', teleports: true, powerups: 'medium', teams: 0 };
   }
 
   usedColors() { return new Set([...this.players.values()].map(p => p.color)); }
@@ -271,11 +271,13 @@ class Room {
 
     if (g.over && !this.resultSent) {
       this.resultSent = true;
-      if (g.winnerId != null) {
+      if (g.teams >= 2) {
+        if (g.winnerTeam != null) for (const gp of g.players) if (gp.team === g.winnerTeam) { const w = this.players.get(gp.id); if (w) w.wins++; }
+      } else if (g.winnerId != null) {
         const w = this.players.get(g.winnerId);
         if (w) w.wins++;
       }
-      this.broadcast({ t: 'result', winnerId: g.winnerId, wins: this.winsMap() });
+      this.broadcast({ t: 'result', winnerId: g.winnerId, winnerTeam: g.winnerTeam, teams: g.teams, wins: this.winsMap() });
       this.commitStats(g);
       this.lastCount = 0;
     }
@@ -301,8 +303,9 @@ class Room {
       const gs = g.stats[gp.id] || { kills: 0, deaths: 0, bonuses: 0, vs: {} };
       const vs = {};
       for (const [op, kv] of Object.entries(gs.vs)) vs[pidName[+op] || ('Hráč ' + op)] = kv;
+      const won = g.teams >= 2 ? (gp.team === g.winnerTeam) : (g.winnerId === gp.id);
       auth.recordGame(pl.account, {
-        games: 1, win: g.winnerId === gp.id ? 1 : 0,
+        games: 1, win: won ? 1 : 0,
         kills: gs.kills, deaths: gs.deaths, bonuses: gs.bonuses, vs,
       });
     }
@@ -386,7 +389,15 @@ wss.on('connection', (ws) => {
       if (msg.size !== undefined && ['small', 'medium', 'large'].includes(msg.size)) room.settings.size = msg.size;
       if (msg.teleports !== undefined) room.settings.teleports = !!msg.teleports;
       if (msg.powerups !== undefined && ['low', 'medium', 'high'].includes(msg.powerups)) room.settings.powerups = msg.powerups;
+      if (msg.teams !== undefined && [0, 2, 3, 4].includes(msg.teams)) room.settings.teams = msg.teams;
       room.broadcastLobby();
+      return;
+    }
+    if (msg.t === 'emote') {
+      if (!room.game) return;
+      const conn = room.conns.get(connId);
+      const pid = conn && conn.pids[0];
+      if (pid != null && EMOTES.includes(msg.emote)) room.game.setEmote(pid, msg.emote);
       return;
     }
   });

@@ -22,6 +22,19 @@ const POWERUP_LEVELS = { low: 0.22, medium: 0.42, high: 0.68 };
 const POWERUP_LIFE = 7;     // seconds a dropped power-up stays before vanishing
 const HUNTER_SPEED_MULT = 1.33;   // sudden-death hunter is this much faster than the fastest survivor
 
+// curse (skull) power-up
+const CURSE_TIME = 8;
+const CURSE_TYPES = ['reverse', 'fast', 'slow', 'mini', 'nobomb', 'autobomb'];
+// gun (rare) power-up
+const GUN_BULLETS = 6, BULLET_SPEED = 158, BULLET_LIFE = 2.4;
+// bomb throw (glove) power-up
+const THROW_DIST = 3, THROW_TIME = 0.32;
+// multi-kill announce window (seconds)
+const MULTIKILL_WINDOW = 2.2;
+
+const TEAM_COLORS = ['#e6394a', '#2f9be0', '#37c26b', '#f2c026'];
+const EMOTES = ['😂', '👍', '😢', '😡', '😎', '🥳', '🤣', '😱'];
+
 // teleports
 const TP_LIFE = 4.0;                 // seconds a portal stays on the board
 const TP_INTERVAL_MIN = 6, TP_INTERVAL_MAX = 11;
@@ -126,6 +139,8 @@ module.exports = {
   TS, PR, EMPTY, SOLID, BRICK, SIZES,
   BASE_SPEED, SPEED_STEP, SPEED_MAX, FUSE, FLAME, KICK_SPEED,
   MAX_BOMBS_CAP, RANGE_CAP, POWERUP_LEVELS, POWERUP_LIFE, HUNTER_SPEED_MULT,
+  CURSE_TIME, CURSE_TYPES, GUN_BULLETS, BULLET_SPEED, BULLET_LIFE, THROW_DIST, THROW_TIME,
+  MULTIKILL_WINDOW, TEAM_COLORS, EMOTES,
   TP_LIFE, TP_INTERVAL_MIN, TP_INTERVAL_MAX, TP_MAX,
   PLAYER_COLORS, BOT_NAMES, AVATARS, SPECIAL_AVATARS, MAPS, MAP_BY_ID,
   inBounds, tileCenter, cellOf, clamp, approach, pillarAt, spawnsFor, spiralOrder,

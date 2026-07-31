@@ -134,6 +134,14 @@
                 <option value="high">Hodně</option>
               </select>
             </label>
+            <label class="mini">Týmy
+              <select id="sel-teams">
+                <option value="0" selected>Každý sám</option>
+                <option value="2">2 týmy</option>
+                <option value="3">3 týmy</option>
+                <option value="4">4 týmy</option>
+              </select>
+            </label>
           </div>
           <div class="setup-row bots-row">
             <label class="mini">Úroveň bota
@@ -187,6 +195,8 @@
           <span class="tc tip">ťuk = pohyb · 2× ťuk = 💣 · 3× ťuk = 💥</span>
         </div>
       </div>
+
+      <div id="emote-bar" class="emote-bar"></div>
 
       <button id="mute-btn" class="mute" title="Zvuk">🔊</button>
       <button id="fs-btn" class="mute fs-fab" title="Celá obrazovka">⛶</button>

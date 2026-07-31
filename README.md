@@ -92,6 +92,14 @@ V lobby (než spustíte hru) může kdokoli nastavit:
 - 🦶 **Kop** – nakopneš bombu a odkutálí se
 - 🎮 **Ruční odpal** – tvoje bomby už nebouchnou samy, odpálíš je klávesou (viz níže).
   Když stejný bonus sebereš znovu, zase se vypne (přepínač).
+- 💀 **Prokletí** – na pár vteřin ti uškodí (obrácené ovládání, super rychlost, jen mini
+  bomby, nemůžeš pokládat, nebo pokládáš bez přestání…).
+- 🥊 **Hod bombou** – když stojíš na bombě a zmáčkneš bombu, hodíš ji přes zeď.
+- 🔫 **Pistole (vzácná!)** – 6 nábojů; klávesa bomby místo pokládání střílí. Náboj letí
+  pomalu, dá se mu uhnout, ale zabíjí.
+
+Navíc: **týmy** (2/3/4 týmy – spoluhráči se navzájem nezraní), **emotes** (lišta emoji ve
+hře), a hlášky **DOUBLE/TRIPLE KILL** při rychlých zabitích.
 
 ## Přihlášení a statistiky (nepovinné)
 

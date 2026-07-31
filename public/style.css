@@ -264,6 +264,29 @@ kbd {
 @keyframes pulseTimer { 50% { opacity: .5; } }
 @media (prefers-reduced-motion: reduce) { .hud-card.timer.low { animation: none; } }
 
+/* emote bar */
+.emote-bar { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; padding: 4px 8px; }
+.emote-btn { width: 40px; height: 40px; padding: 0; font-size: 22px; line-height: 1; cursor: pointer; border: 1px solid var(--line); background: rgba(20,16,49,.85); border-radius: 10px; }
+.emote-btn:hover { border-color: var(--accent2); }
+.emote-btn:active { filter: brightness(1.35); }
+
+/* big transient announcement (multi-kill) */
+#bigmsg {
+  position: absolute; left: 50%; top: 40%; z-index: 8; pointer-events: none;
+  font-family: var(--font); font-weight: 900; letter-spacing: 1px;
+  font-size: clamp(30px, 7vw, 62px); text-shadow: 3px 3px 0 rgba(0,0,0,.55);
+  opacity: 0; transform: translate(-50%, -50%);
+}
+#bigmsg.show { animation: bigpop 1.3s ease; }
+@keyframes bigpop {
+  0% { opacity: 0; transform: translate(-50%,-50%) scale(.5); }
+  15% { opacity: 1; transform: translate(-50%,-50%) scale(1.12); }
+  30% { transform: translate(-50%,-50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%,-50%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { #bigmsg.show { animation: none; opacity: 1; } }
+
 .mute { position: fixed; top: 10px; right: 12px; background: rgba(20,16,49,.85); border: 1px solid var(--line); color: var(--ink); font-size: 18px; border-radius: 10px; width: 42px; height: 38px; cursor: pointer; }
 
 /* touch: virtual cross zones (tap a zone to move that way) */

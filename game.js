@@ -7,12 +7,14 @@ const {
   TS, PR, EMPTY, SOLID, BRICK, SIZES,
   BASE_SPEED, SPEED_STEP, SPEED_MAX, FUSE, FLAME, KICK_SPEED,
   MAX_BOMBS_CAP, RANGE_CAP, POWERUP_LEVELS, POWERUP_LIFE, HUNTER_SPEED_MULT,
+  CURSE_TIME, CURSE_TYPES, GUN_BULLETS, BULLET_SPEED, BULLET_LIFE, THROW_DIST, THROW_TIME,
+  MULTIKILL_WINDOW, TEAM_COLORS,
   TP_LIFE, TP_INTERVAL_MIN, TP_INTERVAL_MAX, TP_MAX,
   PLAYER_COLORS, MAPS, MAP_BY_ID,
   tileCenter, cellOf, clamp, approach, pillarAt, spawnsFor,
 } = C;
 
-const POWERUPS = [['bomb', 30], ['fire', 30], ['speed', 22], ['kick', 10], ['remote', 10]];
+const POWERUPS = [['bomb', 30], ['fire', 30], ['speed', 22], ['kick', 10], ['remote', 10], ['curse', 14], ['throw', 10], ['gun', 3]];
 
 function rollPowerup(chance) {
   if (Math.random() > chance) return null;
@@ -43,8 +45,19 @@ class Player {
     this.kick = false;
     this.remote = false;
     this.bombsOut = 0;
+    this.curse = null; this.curseTimer = 0;
+    this.gun = 0;          // bullets remaining (rare gun power-up)
+    this.throwPU = false;  // can throw bombs over walls
+    this.team = 0;
+    this.emote = null; this.emoteTimer = 0;
+    this.killTimes = [];   // recent kill timestamps (for multi-kill)
   }
-  speed() { return Math.min(BASE_SPEED + this.speedLevel * SPEED_STEP, SPEED_MAX); }
+  speed() {
+    let s = Math.min(BASE_SPEED + this.speedLevel * SPEED_STEP, SPEED_MAX);
+    if (this.curse === 'fast') s *= 1.6;
+    else if (this.curse === 'slow') s *= 0.55;
+    return s;
+  }
   col() { return cellOf(this.x); }
   row() { return cellOf(this.y); }
 }
@@ -64,10 +77,15 @@ class Game {
     this.teleports = [];
     this.tileChanges = [];
     this.events = [];
+    this.bullets = [];      // flying gun bullets
     this.stats = {};        // pid -> { kills, deaths, bonuses, vs:{oppPid:{k,d}} }
     this.over = false;
     this.winnerId = null;
+    this.winnerTeam = null;
     this.endTimer = 0;
+
+    // team mode: 0 = free-for-all, or 2..4 teams
+    this.teams = [2, 3, 4].includes(settings.teams) ? settings.teams : 0;
 
     this.time = 0;
     this.timeLimit = settings.timeLimit || 0;
@@ -101,6 +119,17 @@ class Game {
       pl.y = tileCenter(sr);
       this.players.push(pl);
     });
+
+    // assign balanced random teams (teammates share the team colour)
+    if (this.teams >= 2) {
+      const order = this.players.map((_, i) => i);
+      for (let i = order.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [order[i], order[j]] = [order[j], order[i]]; }
+      order.forEach((pi, k) => {
+        const t = k % this.teams;
+        this.players[pi].team = t;
+        this.players[pi].color = TEAM_COLORS[t];
+      });
+    }
   }
 
   inBounds(c, r) { return c >= 0 && r >= 0 && c < this.cols && r < this.rows; }
@@ -129,7 +158,7 @@ class Game {
   setInput(id, input) { const p = this.playerById(id); if (p && !p.bot) p.input = input; }
   removePlayer(id) { const p = this.playerById(id); if (p) { p.alive = false; p.removed = true; } }
 
-  bombAt(c, r) { return this.bombs.find(b => b.col === c && b.row === r && !b.exploded); }
+  bombAt(c, r) { return this.bombs.find(b => b.col === c && b.row === r && !b.exploded && !b.flying); }
   cellFreeForBomb(c, r) { return this.inBounds(c, r) && this.grid[r][c] === EMPTY && !this.bombAt(c, r); }
 
   walkable(p, c, r) {
@@ -148,6 +177,8 @@ class Game {
     for (const p of this.players) if (p.alive) this._tryBomb(p);
     this._detonations();
     this._updateKickedBombs(dt);
+    this._updateFlying(dt);
+    this._updateBullets(dt);
     this._updateFuses(dt);
     this._updateFlames(dt);
     this._suddenDeath(dt);
@@ -155,7 +186,19 @@ class Game {
     this._agePowerups(dt);
     this._pickups();
     this._deaths();
+    this._updateTimers(dt);
     this._checkRoundEnd(dt);
+  }
+
+  _updateTimers(dt) {
+    for (const p of this.players) {
+      if (p.curse) { p.curseTimer -= dt; if (p.curseTimer <= 0) p.curse = null; }
+      if (p.emote) { p.emoteTimer -= dt; if (p.emoteTimer <= 0) p.emote = null; }
+    }
+  }
+  setEmote(id, emote) {
+    const p = this.playerById(id);
+    if (p && p.alive) { p.emote = emote; p.emoteTimer = 2.2; }
   }
 
   _updateBombPassSets() {
@@ -174,8 +217,9 @@ class Game {
 
   _movePlayer(p, dt) {
     const inp = p.input;
-    const ix = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
-    const iy = (inp.down ? 1 : 0) - (inp.up ? 1 : 0);
+    let ix = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
+    let iy = (inp.down ? 1 : 0) - (inp.up ? 1 : 0);
+    if (p.curse === 'reverse') { ix = -ix; iy = -iy; }   // cursed: controls reversed
     p.moving = false;
     if (ix === 0 && iy === 0) return;
     if (ix !== 0 && this._moveAxis(p, ix, 0, dt)) return;
@@ -220,20 +264,94 @@ class Game {
   }
 
   _tryBomb(p) {
-    const pressed = p.input.bomb && !p.bombHeld;
+    // gun mode: the bomb key fires bullets instead of placing bombs
+    if (p.gun > 0) {
+      const pressed = p.input.bomb && !p.bombHeld;
+      p.bombHeld = p.input.bomb;
+      if (pressed) this._shoot(p);
+      return;
+    }
+    const auto = p.curse === 'autobomb';
+    const pressed = auto ? true : (p.input.bomb && !p.bombHeld);
     p.bombHeld = p.input.bomb;
-    if (!pressed || p.bombsOut >= p.maxBombs) return;
+    if (!pressed) return;
+    if (p.curse === 'nobomb') return;
     const c = p.col(), r = p.row();
-    if (this.grid[r][c] !== EMPTY || this.bombAt(c, r)) return;
+    const here = this.bombAt(c, r);
+    // throw: bomb key while standing on a bomb (and holding the glove) throws it over walls
+    if (here && p.throwPU && !here.flying && !p.bot) { this._throwBomb(here, p.dir); return; }
+    if (p.bombsOut >= p.maxBombs) return;
+    if (this.grid[r][c] !== EMPTY || here) return;
     const passSet = new Set();
     for (const o of this.players) if (o.alive && o.col() === c && o.row() === r) passSet.add(o.id);
     this.bombs.push({
       col: c, row: r, px: tileCenter(c), py: tileCenter(r),
-      owner: p.id, range: p.range, fuse: FUSE, passSet,
-      moving: false, kdx: 0, kdy: 0, exploded: false,
+      owner: p.id, range: p.curse === 'mini' ? 1 : p.range, fuse: FUSE, passSet,
+      moving: false, kdx: 0, kdy: 0, exploded: false, flying: false,
       remote: !!p.remote && !p.bot,   // bots always use timed bombs (they don't detonate)
     });
     p.bombsOut++;
+  }
+
+  _shoot(p) {
+    const dv = { right: [1, 0], left: [-1, 0], up: [0, -1], down: [0, 1] }[p.dir] || [1, 0];
+    this.bullets.push({ px: p.x + dv[0] * TS * 0.3, py: p.y + dv[1] * TS * 0.3, dx: dv[0], dy: dv[1], owner: p.id, life: BULLET_LIFE });
+    p.gun--;
+    this.events.push({ e: 'shoot', col: p.col(), row: p.row() });
+  }
+
+  _throwBomb(b, dir) {
+    const dv = { right: [1, 0], left: [-1, 0], up: [0, -1], down: [0, 1] }[dir] || [1, 0];
+    let land = null;
+    for (let d = THROW_DIST; d >= 1; d--) {
+      const tc = b.col + dv[0] * d, tr = b.row + dv[1] * d;
+      if (this.inBounds(tc, tr) && this.grid[tr][tc] === EMPTY && !this.bombAt(tc, tr)) { land = [tc, tr]; break; }
+    }
+    if (!land) return;
+    b.flying = true; b.flyT = 0; b.passSet.clear();
+    b.fromPx = b.px; b.fromPy = b.py;
+    b.toPx = tileCenter(land[0]); b.toPy = tileCenter(land[1]);
+    b.tland = land;
+    this.events.push({ e: 'throw', col: b.col, row: b.row });
+  }
+
+  _updateFlying(dt) {
+    for (const b of this.bombs) {
+      if (!b.flying || b.exploded) continue;
+      b.flyT += dt / THROW_TIME;
+      if (b.flyT >= 1) {
+        b.flyT = 1; b.flying = false;
+        b.col = b.tland[0]; b.row = b.tland[1]; b.px = b.toPx; b.py = b.toPy;
+      } else {
+        b.px = b.fromPx + (b.toPx - b.fromPx) * b.flyT;
+        b.py = b.fromPy + (b.toPy - b.fromPy) * b.flyT;
+        b.col = cellOf(b.px); b.row = cellOf(b.py);
+      }
+    }
+  }
+
+  _updateBullets(dt) {
+    if (!this.bullets.length) return;
+    for (const bl of this.bullets) {
+      bl.px += bl.dx * BULLET_SPEED * dt;
+      bl.py += bl.dy * BULLET_SPEED * dt;
+      bl.life -= dt;
+      const c = cellOf(bl.px), r = cellOf(bl.py);
+      if (!this.inBounds(c, r) || this.grid[r][c] === SOLID) { bl.life = 0; continue; }
+      if (this.grid[r][c] === BRICK) { this._destroyBrick(c, r); bl.life = 0; continue; }
+      for (const p of this.players) {
+        if (!p.alive || p.id === bl.owner) continue;
+        if (this.teams >= 2) { const o = this.playerById(bl.owner); if (o && o.team === p.team) continue; }
+        if (Math.abs(p.x - bl.px) < TS * 0.42 && Math.abs(p.y - bl.py) < TS * 0.42) {
+          p.alive = false;
+          this.events.push({ e: 'death', id: p.id, col: p.col(), row: p.row(), by: bl.owner });
+          this._recordDeath(p.id, bl.owner);
+          bl.life = 0;
+          break;
+        }
+      }
+    }
+    this.bullets = this.bullets.filter(bl => bl.life > 0);
   }
 
   // Manual detonation: a player with the remote power-up blows their bombs on command.
@@ -492,6 +610,9 @@ class Game {
     else if (type === 'speed') p.speedLevel++;
     else if (type === 'kick') p.kick = true;
     else if (type === 'remote') p.remote = !p.remote;   // re-picking toggles it off/on
+    else if (type === 'throw') p.throwPU = true;
+    else if (type === 'gun') p.gun = GUN_BULLETS;
+    else if (type === 'curse') { p.curse = CURSE_TYPES[(Math.random() * CURSE_TYPES.length) | 0]; p.curseTimer = CURSE_TIME; this.events.push({ e: 'curse', id: p.id, curse: p.curse }); }
   }
 
   _stat(pid) {
@@ -505,6 +626,13 @@ class Game {
       (ks.vs[victim] || (ks.vs[victim] = { k: 0, d: 0 })).k++;
       const vsv = this._stat(victim);
       (vsv.vs[killer] || (vsv.vs[killer] = { k: 0, d: 0 })).d++;
+      // multi-kill: 2+ kills within a short window
+      const k = this.playerById(killer);
+      if (k) {
+        k.killTimes = k.killTimes.filter(t => this.time - t < MULTIKILL_WINDOW);
+        k.killTimes.push(this.time);
+        if (k.killTimes.length >= 2) this.events.push({ e: 'multikill', id: killer, n: k.killTimes.length });
+      }
     }
   }
 
@@ -514,8 +642,13 @@ class Game {
       const c = p.col(), r = p.row();
       const f = this.flames.find(fl => fl.col === c && fl.row === r);
       if (f) {
-        p.alive = false;
         const by = f.owner != null ? f.owner : null;
+        // team mode: teammates don't kill each other with their bombs
+        if (this.teams >= 2 && by != null && by !== p.id) {
+          const killer = this.playerById(by);
+          if (killer && killer.team === p.team) continue;
+        }
+        p.alive = false;
         this.events.push({ e: 'death', id: p.id, col: c, row: r, by });
         this._recordDeath(p.id, by);
       }
@@ -529,7 +662,15 @@ class Game {
     const contenders = this.players.filter(p => !p.removed).length;
     if (contenders < 2) return;
     const alive = this.players.filter(p => p.alive);
-    if (alive.length <= 1) {
+    if (this.teams >= 2) {
+      const teamsAlive = new Set(alive.map(p => p.team));
+      if (teamsAlive.size <= 1) {
+        this.over = true;
+        this.winnerTeam = teamsAlive.size === 1 ? [...teamsAlive][0] : null;
+        this.winnerId = null;
+        this.endTimer = 0;
+      }
+    } else if (alive.length <= 1) {
       this.over = true;
       this.winnerId = alive.length === 1 ? alive[0].id : null;
       this.endTimer = 0;
@@ -541,9 +682,10 @@ class Game {
       TS, COLS: this.cols, ROWS: this.rows, FUSE, FLAME,
       map: this.map.id, mapName: this.map.name,
       timeLimit: this.timeLimit,
+      teams: this.teams,
       grid: this.grid.map(row => row.slice()),
       players: this.players.map(p => ({
-        id: p.id, name: p.name, color: p.color, bot: p.bot ? p.bot.level : 0, avatar: p.avatar,
+        id: p.id, name: p.name, color: p.color, bot: p.bot ? p.bot.level : 0, avatar: p.avatar, team: p.team,
       })),
     };
   }
@@ -558,16 +700,19 @@ class Game {
         id: p.id, x: Math.round(p.x), y: Math.round(p.y), dir: p.dir,
         moving: p.moving, alive: p.alive,
         bombs: p.maxBombs, range: p.range, speed: p.speedLevel, kick: p.kick, remote: p.remote,
+        curse: p.curse, gun: p.gun, thr: p.throwPU, emote: p.emote,
       })),
-      bombs: this.bombs.map(b => ({ x: Math.round(b.px), y: Math.round(b.py), fuse: +b.fuse.toFixed(2), moving: b.moving, remote: !!b.remote })),
+      bombs: this.bombs.map(b => ({ x: Math.round(b.px), y: Math.round(b.py), fuse: +b.fuse.toFixed(2), moving: b.moving, remote: !!b.remote, fly: b.flying ? +b.flyT.toFixed(2) : 0 })),
       flames: this.flames.map(f => ({ col: f.col, row: f.row, type: f.type, life: +f.life.toFixed(2) })),
       powerups: this.powerups.map(pu => ({ col: pu.col, row: pu.row, type: pu.type, life: +pu.life.toFixed(2) })),
       teleports: this.teleports.map(tp => ({ col: tp.col, row: tp.row, life: +tp.life.toFixed(2) })),
+      bullets: this.bullets.map(bl => ({ x: Math.round(bl.px), y: Math.round(bl.py) })),
       hunter: this.hunter ? { x: Math.round(this.hunter.px), y: Math.round(this.hunter.py), dir: this.hunter.dir } : null,
       tiles: this.tileChanges,
       events: this.events,
       over: this.over,
       winnerId: this.winnerId,
+      winnerTeam: this.winnerTeam,
     };
     this.tileChanges = [];
     this.events = [];

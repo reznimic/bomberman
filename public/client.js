@@ -19,6 +19,10 @@ const INTERP_DELAY = 70;   // ms rendered in the past to smooth network jitter
 
 const EMPTY = 0, SOLID = 1, BRICK = 2;
 
+const TEAM_COLORS = ['#e6394a', '#2f9be0', '#37c26b', '#f2c026'];
+const TEAM_NAMES = ['Červení', 'Modří', 'Zelení', 'Žlutí'];
+const EMOTES = ['😂', '👍', '😢', '😡', '😎', '🥳', '🤣', '😱'];
+
 // avatar emoji (must match constants.js AVATARS exactly)
 const AVATARS = [
   '🐱', '🐶', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🐰', '🐔', '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞', '🐜', '🦗', '🦂', '🦀', '🐍', '🐢', '🐠', '🐟', '🐡', '🐬', '🐳', '🐋', '🦈', '🐙', '🦑', '🦐', '🦞', '🦕', '🦖', '🦎', '🐲', '🦓', '🦒', '🐘', '🦏', '🦛', '🐪', '🐫', '🦙', '🦘', '🦥', '🦦', '🦔', '🐇', '🐹', '🐭',
@@ -110,7 +114,7 @@ function handle(m) {
       break;
     case 'result':
       S.wins = m.wins; S.result = { winnerId: m.winnerId };
-      showResult(m.winnerId);
+      showResult(m);
       break;
     case 'countdown':
       showCountdown(m.n);
@@ -492,6 +496,7 @@ function draw(now) {
     players.sort((A, B) => A.y - B.y);
     for (const p of players) drawPlayer(p, now);
     for (const f of S.cur.flames) drawFlame(f, now);
+    if (S.cur.bullets) for (const bl of S.cur.bullets) drawBullet(bl, now);
     const hunt = interpHunter();
     if (hunt) drawHunter(hunt, now);
   }
@@ -590,9 +595,11 @@ function drawFalling(now) {
 function drawBomb(b, now) {
   const pulse = 1 + 0.12 * Math.sin(now / 90) * (b.fuse < 1 ? 2 : 1);
   const rad = (TS * 0.34) * pulse;
-  const x = b.x, y = b.y;
-  ctx.fillStyle = 'rgba(0,0,0,.3)';
-  ctx.beginPath(); ctx.ellipse(x, y + TS * 0.28, rad * 0.9, rad * 0.4, 0, 0, 7); ctx.fill();
+  const loft = b.fly ? Math.sin(b.fly * Math.PI) * TS * 0.9 : 0;   // arc while thrown
+  const x = b.x, y = b.y - loft;
+  // shadow stays on the ground
+  ctx.fillStyle = `rgba(0,0,0,${0.3 - loft / TS * 0.15})`;
+  ctx.beginPath(); ctx.ellipse(x, b.y + TS * 0.28, rad * 0.9, rad * 0.4, 0, 0, 7); ctx.fill();
   // body
   const g = ctx.createRadialGradient(x - rad * 0.3, y - rad * 0.4, rad * 0.2, x, y, rad);
   g.addColorStop(0, '#5a5a6b'); g.addColorStop(0.4, '#1c1c26'); g.addColorStop(1, '#050509');
@@ -707,8 +714,18 @@ function drawHunter(h, now) {
   ctx.restore();
 }
 
-const PU_ICON = { bomb: '💣', fire: '🔥', speed: '⚡', kick: '🦶', remote: '🎮' };
-const PU_TINT = { bomb: '#ff5a3c', fire: '#ff8c1a', speed: '#2f9be0', kick: '#37c26b', remote: '#a259e6' };
+function drawBullet(bl) {
+  ctx.save();
+  ctx.shadowColor = '#ffd24d'; ctx.shadowBlur = 8;
+  ctx.fillStyle = '#fff2a8';
+  ctx.beginPath(); ctx.arc(bl.x, bl.y, TS * 0.11, 0, 7); ctx.fill();
+  ctx.fillStyle = '#ff8c1a';
+  ctx.beginPath(); ctx.arc(bl.x, bl.y, TS * 0.06, 0, 7); ctx.fill();
+  ctx.restore();
+}
+
+const PU_ICON = { bomb: '💣', fire: '🔥', speed: '⚡', kick: '🦶', remote: '🎮', curse: '💀', throw: '🥊', gun: '🔫' };
+const PU_TINT = { bomb: '#ff5a3c', fire: '#ff8c1a', speed: '#2f9be0', kick: '#37c26b', remote: '#a259e6', curse: '#9a4bd6', throw: '#e0b34a', gun: '#c0c0d0' };
 function drawPowerup(pu) {
   const cx = pu.col * TS + TS / 2;
   const cy = pu.row * TS + TS / 2 + Math.sin(performance.now() / 350 + pu.col + pu.row) * 2;
@@ -835,6 +852,27 @@ function drawPlayer(p, now) {
   ctx.lineJoin = 'round';
   ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = 2.5; ctx.strokeText(meta.name, x, ny);
   ctx.fillStyle = '#fff'; ctx.fillText(meta.name, x, ny);
+
+  // curse badge (pulsing skull) on cursed players
+  if (p.curse) {
+    ctx.font = `${Math.floor(TS * 0.34)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(now / 120);
+    ctx.fillStyle = '#c79bff';
+    ctx.fillText('💀', x + R * 0.75, cy - R * 0.75);
+    ctx.globalAlpha = 1;
+  }
+  // emote bubble
+  if (p.emote) {
+    const by = y - TS * 1.02;
+    ctx.fillStyle = '#fff';
+    roundRectFill(ctx, x - TS * 0.28, by - TS * 0.28, TS * 0.56, TS * 0.5, TS * 0.14);
+    ctx.beginPath(); ctx.moveTo(x - TS * 0.08, by + TS * 0.2); ctx.lineTo(x, by + TS * 0.34); ctx.lineTo(x + TS * 0.08, by + TS * 0.2); ctx.closePath(); ctx.fill();
+    ctx.font = `${Math.floor(TS * 0.36)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#181022';
+    ctx.fillText(p.emote, x, by - TS * 0.02);
+  }
 }
 
 function drawTopper(shape, x, cy, r, color) {
@@ -928,7 +966,7 @@ function renderHud() {
       <span class="dot" style="background:${meta.color};color:${meta.color}"></span>
       <span class="hname">${escapeHtml(meta.name)}</span>
       <span class="hwins">🏆 ${S.wins[id] || 0}</span>
-      ${st && st.alive ? `<span class="hstats">💣${st.bombs} 🔥${st.range}${st.kick ? ' 🦶' : ''}${st.remote ? ' 🎮' : ''}</span>`
+      ${st && st.alive ? `<span class="hstats">💣${st.bombs} 🔥${st.range}${st.kick ? ' 🦶' : ''}${st.remote ? ' 🎮' : ''}${st.thr ? ' 🥊' : ''}${st.gun ? ' 🔫' + st.gun : ''}${st.curse ? ' 💀' : ''}</span>`
         : (dead ? '<span class="hstats">☠</span>' : '')}
     </div>`;
   }
@@ -946,13 +984,18 @@ function renderHud() {
   hud.innerHTML = html;
 }
 
-function showResult(winnerId) {
+function showResult(m) {
   const ov = document.getElementById('overlay');
   const title = document.getElementById('overlay-title');
   const sub = document.getElementById('overlay-sub');
-  if (winnerId != null && S.meta[winnerId]) {
-    title.textContent = `${S.meta[winnerId].name} vyhrává!`;
-    title.style.color = S.meta[winnerId].color;
+  if (m.teams >= 2) {
+    if (m.winnerTeam != null) {
+      title.textContent = `${TEAM_NAMES[m.winnerTeam]} vyhrávají!`;
+      title.style.color = TEAM_COLORS[m.winnerTeam];
+    } else { title.textContent = 'Remíza!'; title.style.color = ''; }
+  } else if (m.winnerId != null && S.meta[m.winnerId]) {
+    title.textContent = `${S.meta[m.winnerId].name} vyhrává!`;
+    title.style.color = S.meta[m.winnerId].color;
   } else {
     title.textContent = 'Remíza!';
     title.style.color = '';
@@ -966,6 +1009,19 @@ function showCountdown(n) {
   ov.hidden = false;
   document.getElementById('overlay-sub').innerHTML = `Další kolo za <span class="cd">${n}</span>`;
   Sound.tick();
+}
+
+let bigTimer = null;
+function bigMessage(txt, color) {
+  let el = document.getElementById('bigmsg');
+  if (!el) { el = document.createElement('div'); el.id = 'bigmsg'; document.getElementById('stage').appendChild(el); }
+  el.textContent = txt; el.style.color = color || '#ffd94d';
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(bigTimer); bigTimer = setTimeout(() => el.classList.remove('show'), 1300);
+}
+function showMultikill(n) {
+  const t = n >= 5 ? 'MASAKR! 💀' : n === 4 ? 'QUADRA KILL!' : n === 3 ? 'TRIPLE KILL!' : 'DOUBLE KILL!';
+  bigMessage(t, '#ff5a3c');
 }
 
 // ===================== sound =====================
@@ -999,6 +1055,10 @@ const Sound = (() => {
     warp() { tone(500, 0.12, 'sine', 0.15); setTimeout(() => tone(1000, 0.14, 'sine', 0.15), 60); setTimeout(() => tone(1600, 0.1, 'sine', 0.12), 130); },
     chomp() { tone(300, 0.09, 'square', 0.2); setTimeout(() => tone(180, 0.12, 'square', 0.2), 90); },
     tick() { tone(880, 0.08, 'sine', 0.14); },
+    shoot() { tone(720, 0.05, 'square', 0.12); tone(420, 0.06, 'square', 0.08); },
+    whoosh() { tone(500, 0.14, 'sine', 0.12); setTimeout(() => tone(760, 0.1, 'sine', 0.1), 70); },
+    curse() { tone(300, 0.18, 'sawtooth', 0.16); setTimeout(() => tone(150, 0.32, 'sawtooth', 0.16), 140); },
+    multi(n) { const b = 520; for (let i = 0; i < Math.min(n, 4); i++) setTimeout(() => tone(b + i * 150, 0.12, 'square', 0.16), i * 95); },
     toggle() { muted = !muted; return muted; },
     resume() { try { ctx().resume(); } catch {} },
   };
@@ -1012,6 +1072,10 @@ function onEvent(e) {
   else if (e.e === 'sd') Sound.alarm();
   else if (e.e === 'teleport') Sound.warp();
   else if (e.e === 'eat') Sound.chomp();
+  else if (e.e === 'shoot') Sound.shoot();
+  else if (e.e === 'throw') Sound.whoosh();
+  else if (e.e === 'curse') Sound.curse();
+  else if (e.e === 'multikill') { showMultikill(e.n); Sound.multi(e.n); }
 }
 
 document.getElementById('mute-btn').addEventListener('click', (ev) => {
@@ -1272,6 +1336,7 @@ const selSize = document.getElementById('sel-size');
 const selTime = document.getElementById('sel-time');
 const chkTele = document.getElementById('chk-teleports');
 const selPow = document.getElementById('sel-powerups');
+const selTeams = document.getElementById('sel-teams');
 for (const m of MAP_LIST) {
   const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; selMap.appendChild(o);
 }
@@ -1280,6 +1345,16 @@ selSize.addEventListener('change', () => send({ t: 'settings', size: selSize.val
 selTime.addEventListener('change', () => send({ t: 'settings', timeLimit: +selTime.value }));
 chkTele.addEventListener('change', () => send({ t: 'settings', teleports: chkTele.checked }));
 selPow.addEventListener('change', () => send({ t: 'settings', powerups: selPow.value }));
+selTeams.addEventListener('change', () => send({ t: 'settings', teams: +selTeams.value }));
+
+// emote bar: tap an emoji to make your player react
+const emoteBar = document.getElementById('emote-bar');
+for (const e of EMOTES) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'emote-btn'; b.textContent = e;
+  b.addEventListener('click', () => send({ t: 'emote', emote: e }));
+  emoteBar.appendChild(b);
+}
 document.getElementById('add-bot').addEventListener('click', () =>
   send({
     t: 'addBot',
@@ -1295,6 +1370,7 @@ function applySettings(s) {
   if (active !== selTime && s.timeLimit != null) selTime.value = String(s.timeLimit);
   if (active !== chkTele && s.teleports != null) chkTele.checked = !!s.teleports;
   if (active !== selPow && s.powerups != null) selPow.value = s.powerups;
+  if (active !== selTeams && s.teams != null) selTeams.value = String(s.teams);
 }
 
 function showJoinError(msg) {
