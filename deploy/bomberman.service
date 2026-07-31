@@ -1,0 +1,19 @@
+[Unit]
+Description=Bomberman multiplayer game server
+After=network.target
+
+[Service]
+Type=simple
+# uprav cestu, kam nakopíruješ projekt:
+WorkingDirectory=/var/www/bomberman
+# cesta k node zjistíš přes `which node` — nvm mívá jinou než /usr/bin/node:
+ExecStart=/usr/bin/node server.js
+Environment=PORT=3000
+Restart=on-failure
+RestartSec=3
+# běž pod neprivilegovaným uživatelem:
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target

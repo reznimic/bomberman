@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>💣 Bomberman LAN</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>💣</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- ===== JOIN ===== -->
+    <section id="screen-join" class="screen active">
+      <div class="panel">
+        <h1 class="logo">BOMBER<span>MAN</span></h1>
+        <p class="tagline">Domácí síťová řež pro 2–8 hráčů</p>
+
+        <div class="account-box">
+          <div id="acc-login">
+            <div class="acc-row">
+              <input id="acc-name" type="text" maxlength="14" placeholder="Přezdívka" autocomplete="username" />
+              <input id="acc-pass" type="password" maxlength="64" placeholder="Heslo" autocomplete="current-password" />
+            </div>
+            <div class="acc-row">
+              <button type="button" id="acc-login-btn" class="btn small">Přihlásit</button>
+              <button type="button" id="acc-register-btn" class="btn small ghost">Registrovat</button>
+            </div>
+            <p id="acc-error" class="error" hidden></p>
+            <p class="hint tiny">Přihlášení si tě pamatuje i příště a rezervuje ti jméno. Nebo hraj jako host níže.</p>
+          </div>
+          <div id="acc-info" hidden>
+            <div class="acc-info-row">
+              <span>Přihlášen: <b id="acc-who"></b></span>
+              <span class="acc-actions">
+                <button type="button" id="acc-stats-btn" class="btn small">📊 Statistiky</button>
+                <button type="button" id="acc-logout-btn" class="btn small ghost">Odhlásit</button>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <form id="join-form" autocomplete="off">
+          <label>Tvoje jméno
+            <input id="f-name" type="text" maxlength="14" placeholder="Táta" required />
+          </label>
+          <label>Kód místnosti
+            <input id="f-room" type="text" maxlength="12" value="HRA" required />
+          </label>
+          <fieldset class="locals">
+            <legend>Kolik vás hraje na tomhle počítači?</legend>
+            <label class="radio"><input type="radio" name="locals" value="1" checked /> <span>1 hráč</span></label>
+            <label class="radio"><input type="radio" name="locals" value="2" /> <span>2 hráči</span></label>
+          </fieldset>
+          <div id="keys-config" class="keys-config"></div>
+          <button type="submit" class="btn primary">Připojit se</button>
+        </form>
+        <p id="join-error" class="error" hidden></p>
+        <p class="hint">Všichni zadejte <b>stejný kód místnosti</b> a jste spolu ve hře.</p>
+      </div>
+    </section>
+
+    <!-- ===== LOBBY ===== -->
+    <section id="screen-lobby" class="screen">
+      <div class="panel wide">
+        <div class="lobby-head">
+          <div>
+            <div class="eyebrow">Místnost</div>
+            <div id="lobby-code" class="room-code">HRA</div>
+          </div>
+          <div class="lobby-count"><span id="lobby-num">0</span>/8 hráčů</div>
+        </div>
+
+        <ul id="player-list" class="player-list"></ul>
+
+        <div class="setup">
+          <div class="setup-row">
+            <label class="mini">Mapa
+              <select id="sel-map"></select>
+            </label>
+            <label class="mini">Velikost
+              <select id="sel-size">
+                <option value="small">Malá</option>
+                <option value="medium" selected>Střední</option>
+                <option value="large">Velká</option>
+              </select>
+            </label>
+          </div>
+          <div class="setup-row">
+            <label class="mini">Časový limit
+              <select id="sel-time">
+                <option value="0">Vypnuto</option>
+                <option value="90">1:30</option>
+                <option value="120" selected>2:00</option>
+                <option value="180">3:00</option>
+              </select>
+            </label>
+            <label class="mini check">
+              <input type="checkbox" id="chk-teleports" checked /> <span>🌀 Teleporty</span>
+            </label>
+          </div>
+          <div class="setup-row">
+            <label class="mini">Množství bonusů
+              <select id="sel-powerups">
+                <option value="low">Málo</option>
+                <option value="medium" selected>Středně</option>
+                <option value="high">Hodně</option>
+              </select>
+            </label>
+          </div>
+          <div class="setup-row bots-row">
+            <label class="mini">Úroveň bota
+              <select id="sel-bot">
+                <option value="1">🤖 Nováček</option>
+                <option value="2" selected>🤖 Zkušený</option>
+                <option value="3">🤖 Mistr</option>
+              </select>
+            </label>
+            <label class="mini narrow">Počet
+              <select id="sel-bot-count">
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+              </select>
+            </label>
+            <button id="add-bot" class="btn small">+ Přidat</button>
+          </div>
+        </div>
+
+        <div class="controls-legend">
+          <h3>Ovládání na tomhle počítači</h3>
+          <div id="legend-grid" class="legend-grid"></div>
+        </div>
+
+        <button id="start-btn" class="btn primary" disabled>Spustit hru (potřeba 2+ hráčů)</button>
+        <p class="hint">Hra se pak hraje na kola dokola — kdokoli může spustit další.</p>
+      </div>
+    </section>
+
+    <!-- ===== GAME ===== -->
+    <section id="screen-game" class="screen">
+      <div id="hud" class="hud"></div>
+      <div id="stage">
+        <canvas id="canvas"></canvas>
+        <div id="overlay" class="overlay" hidden>
+          <div class="overlay-box">
+            <div id="overlay-title" class="overlay-title"></div>
+            <div id="overlay-sub" class="overlay-sub"></div>
+          </div>
+        </div>
+        <div id="touch-cross" hidden>
+          <span class="tc up">▲</span>
+          <span class="tc right">▶</span>
+          <span class="tc down">▼</span>
+          <span class="tc left">◀</span>
+          <span class="tc tip">ťuk = pohyb · 2× ťuk = 💣 · 3× ťuk = 💥</span>
+        </div>
+      </div>
+
+      <button id="mute-btn" class="mute" title="Zvuk">🔊</button>
+      <button id="fs-btn" class="mute fs-fab" title="Celá obrazovka">⛶</button>
+      <button id="game-stats-btn" class="mute stats-fab" title="Statistiky" hidden>📊</button>
+    </section>
+
+    <!-- stats modal (overlays any screen) -->
+    <div id="stats-modal" class="modal" hidden>
+      <div class="modal-box">
+        <button class="modal-close" id="stats-close" title="Zavřít">✕</button>
+        <h2 id="stats-title">Statistiky</h2>
+        <div id="stats-body"></div>
+      </div>
+    </div>
+
+  </div>
+  <script src="client.js"></script>
+</body>
+</html>

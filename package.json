@@ -1,0 +1,13 @@
+{
+  "name": "bomberman-lan",
+  "version": "1.0.0",
+  "description": "Atomic Bomberman styled LAN multiplayer game (up to 8 players)",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
