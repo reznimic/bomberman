@@ -245,7 +245,7 @@ kbd {
 
 #stage { position: relative; flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; min-height: 0; touch-action: none; }
 #canvas {
-  image-rendering: pixelated; border-radius: 10px;
+  border-radius: 10px;
   box-shadow: 0 0 0 3px #0a0818, 0 20px 50px rgba(0,0,0,.55);
   background: #10361a;
 }

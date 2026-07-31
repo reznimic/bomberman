@@ -187,6 +187,7 @@ const ctx = canvas.getContext('2d');
 // re-rendered only when tiles change, so we don't redraw ~hundreds of tiles every frame
 const bg = document.createElement('canvas');
 const bgCtx = bg.getContext('2d');
+let RS = 1;   // render scale: device pixels per world unit
 let TS = 48, COLS = 17, ROWS = 13;
 
 function startRound(m) {
@@ -194,7 +195,7 @@ function startRound(m) {
   S.round = m.round;
   S.wins = m.wins;
   S.meta = {};
-  m.players.forEach(p => { S.meta[p.id] = { name: p.name, color: p.color, avatar: p.avatar || '🙂' }; });
+  m.players.forEach(p => { S.meta[p.id] = { name: p.name, color: p.color, avatar: p.avatar || '' }; });
   TS = m.TS; COLS = m.COLS; ROWS = m.ROWS;
   S.grid = m.grid.map(row => row.slice());
   S.cur = null;
@@ -202,14 +203,11 @@ function startRound(m) {
   S.result = null;
   S.sdWalls = new Set();
   S.falling = [];
-  canvas.width = COLS * TS;
-  canvas.height = ROWS * TS;
-  renderBackground();
   document.getElementById('overlay').hidden = true;
   show('game');
-  // size the canvas only after the game screen is actually visible (has real dimensions)
-  fitCanvas();
-  requestAnimationFrame(fitCanvas);
+  // size + paint only after the game screen is visible (has real dimensions)
+  resizeCanvas();
+  requestAnimationFrame(resizeCanvas);
 }
 
 function onState(m) {
@@ -419,16 +417,27 @@ function setupTouch() {
 }
 
 // ===================== canvas sizing =====================
+// Size the canvas at the display's real device pixels (crisp on Retina / phones),
+// keeping draw code in "world" coordinates via the RS scale factor.
 function fitCanvas() {
   const stage = document.getElementById('stage');
-  const availW = stage.clientWidth;
-  const availH = stage.clientHeight;
-  if (availW <= 0 || availH <= 0 || !canvas.width || !canvas.height) return;
-  const scale = Math.min(availW / canvas.width, availH / canvas.height);
-  canvas.style.width = Math.floor(canvas.width * scale) + 'px';
-  canvas.style.height = Math.floor(canvas.height * scale) + 'px';
+  const availW = stage.clientWidth, availH = stage.clientHeight;
+  const worldW = COLS * TS, worldH = ROWS * TS;
+  if (availW <= 0 || availH <= 0 || !worldW || !worldH) return;
+  const cssScale = Math.min(availW / worldW, availH / worldH);
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const scale = cssScale * dpr;                 // world unit -> device pixel
+  canvas.style.width = Math.floor(worldW * cssScale) + 'px';
+  canvas.style.height = Math.floor(worldH * cssScale) + 'px';
+  canvas.width = Math.round(worldW * scale);
+  canvas.height = Math.round(worldH * scale);
+  RS = scale;
 }
-window.addEventListener('resize', () => { if (S.static) fitCanvas(); });
+function resizeCanvas() {
+  fitCanvas();
+  renderBackground();   // backing store was recreated -> repaint the cached background
+}
+window.addEventListener('resize', () => { if (S.static) resizeCanvas(); });
 
 // ===================== rendering =====================
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -470,8 +479,10 @@ function draw(now) {
   requestAnimationFrame(draw);
   if (!S.static || !S.grid) return;
 
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (bg.width) ctx.drawImage(bg, 0, 0);
   else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(RS, 0, 0, RS, 0, 0);   // entities drawn in world coords at device resolution
   if (S.cur) {
     if (S.cur.teleports) for (const tp of S.cur.teleports) drawTeleport(tp, now);
     for (const pu of S.cur.powerups) drawPowerup(pu);
@@ -493,6 +504,7 @@ function renderBackground() {
   if (!S.grid) return;
   bg.width = canvas.width;
   bg.height = canvas.height;
+  bgCtx.setTransform(RS, 0, 0, RS, 0, 0);   // draw in world coords at device resolution
   const th = theme();
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) paintCell(c, r, th);
@@ -500,7 +512,9 @@ function renderBackground() {
 }
 // Repaint one cell of the background (floor + whatever tile sits on it).
 function updateBgCell(c, r) {
-  if (S.grid) paintCell(c, r, theme());
+  if (!S.grid) return;
+  bgCtx.setTransform(RS, 0, 0, RS, 0, 0);
+  paintCell(c, r, theme());
 }
 function paintCell(c, r, th) {
   bgCtx.fillStyle = (r + c) % 2 === 0 ? th.floorA : th.floorB;
@@ -729,43 +743,46 @@ function drawPowerup(pu) {
 }
 
 function drawPlayer(p, now) {
-  const meta = S.meta[p.id] || { color: '#fff', name: '?', avatar: '🙂' };
+  const meta = S.meta[p.id] || { color: '#fff', name: '?', avatar: '' };
   if (!p.alive) { drawGhost(p, meta); return; }
   const x = p.x, y = p.y;
   const bob = p.moving ? Math.sin(now / 70) * 2 : 0;
-  const bodyR = TS * 0.32;
   const cy = y + bob;
-  // shadow
+  const R = TS * 0.36;
+  // soft shadow
   ctx.fillStyle = 'rgba(0,0,0,.28)';
-  ctx.beginPath(); ctx.ellipse(x, y + TS * 0.32, bodyR * 0.95, bodyR * 0.4, 0, 0, 7); ctx.fill();
-  // feet (walk animation)
-  ctx.fillStyle = shade(meta.color, -0.35);
-  const fw = bodyR * 0.5, spread = p.moving ? Math.sin(now / 70) * 3 : 0;
-  ctx.fillRect(x - fw - 1 + spread, y + TS * 0.16, fw, bodyR * 0.5);
-  ctx.fillRect(x + 1 - spread, y + TS * 0.16, fw, bodyR * 0.5);
-  // coloured disc = player identity
-  const g = ctx.createRadialGradient(x - bodyR * 0.3, cy - bodyR * 0.4, bodyR * 0.2, x, cy, bodyR * 1.2);
-  g.addColorStop(0, shade(meta.color, 0.4)); g.addColorStop(1, meta.color);
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.arc(x, cy, bodyR, 0, 7); ctx.fill();
-  ctx.strokeStyle = shade(meta.color, -0.4); ctx.lineWidth = 2.5; ctx.stroke();
-  // avatar emoji on top (skip for the plain/default avatar).
-  // Use an emoji-capable font + a solid fill: on some platforms a canvas emoji is
-  // drawn as a monochrome glyph that would otherwise inherit the disc gradient and vanish.
+  ctx.beginPath(); ctx.ellipse(x, y + TS * 0.34, R * 0.85, R * 0.34, 0, 0, 7); ctx.fill();
+
   if (meta.avatar) {
-    ctx.font = `${Math.floor(bodyR * 1.55)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    // just the avatar — a thin coloured ring gives identity, no filled "body" behind it
+    ctx.beginPath(); ctx.arc(x, cy, R * 0.9, 0, 7);
+    ctx.strokeStyle = meta.color; ctx.lineWidth = Math.max(2, TS * 0.07); ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.font = `${Math.floor(TS * 0.66)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#181022';
+    ctx.fillStyle = '#181022';   // solid fill so a monochrome-emoji platform still shows it
     ctx.fillText(meta.avatar, x, cy + 1);
+  } else {
+    // default (no avatar): a coloured character
+    ctx.fillStyle = shade(meta.color, -0.35);
+    const fw = R * 0.45, spread = p.moving ? Math.sin(now / 70) * 3 : 0;
+    ctx.fillRect(x - fw - 1 + spread, y + TS * 0.18, fw, R * 0.45);
+    ctx.fillRect(x + 1 - spread, y + TS * 0.18, fw, R * 0.45);
+    const g = ctx.createRadialGradient(x - R * 0.3, cy - R * 0.4, R * 0.2, x, cy, R * 1.2);
+    g.addColorStop(0, shade(meta.color, 0.4)); g.addColorStop(1, meta.color);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, cy, R * 0.9, 0, 7); ctx.fill();
+    ctx.strokeStyle = shade(meta.color, -0.4); ctx.lineWidth = 2; ctx.stroke();
   }
-  // name tag, above the head so it never covers the avatar
+
+  // name tag above the head
   ctx.font = `bold ${Math.floor(TS * 0.24)}px ${getFont()}`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
   const tw = ctx.measureText(meta.name).width;
   ctx.fillStyle = 'rgba(0,0,0,.6)';
-  roundRectFill(ctx, x - tw / 2 - 5, y - TS * 0.78, tw + 10, TS * 0.28, 5);
+  roundRectFill(ctx, x - tw / 2 - 5, y - TS * 0.82, tw + 10, TS * 0.28, 5);
   ctx.fillStyle = '#fff';
-  ctx.fillText(meta.name, x, y - TS * 0.54);
+  ctx.fillText(meta.name, x, y - TS * 0.58);
 }
 
 function drawTopper(shape, x, cy, r, color) {
@@ -974,7 +991,7 @@ function toggleFullscreen() {
 }
 document.getElementById('fs-btn').addEventListener('click', toggleFullscreen);
 for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) {
-  document.addEventListener(ev, () => { if (S.static) setTimeout(fitCanvas, 60); });
+  document.addEventListener(ev, () => { if (S.static) setTimeout(resizeCanvas, 60); });
 }
 
 // leave the room / round and return to the main menu
