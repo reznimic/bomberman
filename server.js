@@ -15,8 +15,9 @@ const MAX_PLAYERS = 8;
 // Bonus avatars for specific accounts (lowercase name -> special id). Not shown in the
 // picker; auto-applied in-game for that player. Special ids: 'pacman', 'taz'.
 const SPECIAL_AVATARS = {
-  // 'tracy': 'pacman',
-  // 'nekdo': 'taz',
+  'tray': 'pacman',
+  'tracy': 'pacman',   // covers the spelling seen earlier; harmless if no such account exists
+  'taz': 'taz',
 };
 const TICK_HZ = 60;
 const SNAP_EVERY = 2;      // broadcast every 2nd tick -> 30 Hz
